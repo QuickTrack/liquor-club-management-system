@@ -1,5 +1,6 @@
 import { connectDB } from "./connection";
 import {
+  Category,
   Customer,
   Product,
   Staff,
@@ -12,6 +13,7 @@ import {
   IHappyHour,
   IRecipe,
   IProduct,
+  ICategory,
   ICustomer,
   IStaff,
   ISupplier,
@@ -27,7 +29,8 @@ const seedData = async () => {
     await connectDB();
     console.log("✅ Connected to MongoDB");
 
-    // Clear existing data
+    // Clear existing data (order matters due to foreign keys)
+    await Category.deleteMany({});
     await Customer.deleteMany({});
     await Product.deleteMany({});
     await Staff.deleteMany({});
@@ -54,6 +57,28 @@ const seedData = async () => {
 
     const customerDocs = await Customer.insertMany(customers);
     console.log(`✅ Seeded ${customerDocs.length} customers`);
+
+    // ==========================================
+    // SEED CATEGORIES
+    // ==========================================
+    const categories: Partial<ICategory>[] = [
+      { name: "Bourbon", description: "American and Kentucky straight whiskey", color: "#c08410", icon: "🥃", sortOrder: 1, isActive: true },
+      { name: "Vodka", description: "Clear distilled spirits", color: "#3b82f6", icon: "🍸", sortOrder: 2, isActive: true },
+      { name: "Champagne", description: "Sparkling wines from France", color: "#fcd34d", icon: "🥂", sortOrder: 3, isActive: true },
+      { name: "Scotch", description: "Malted barley whisky from Scotland", color: "#d97706", icon: "🥃", sortOrder: 4, isActive: true },
+      { name: "Tequila", description: "Mexican distilled agave spirit", color: "#f59e0b", icon: "🌮", sortOrder: 5, isActive: true },
+      { name: "Cognac", description: "French brandy from Cognac region", color: "#92400e", icon: "🍷", sortOrder: 6, isActive: true },
+      { name: "Beer", description: "Fermented malt beverages", color: "#f97316", icon: "🍺", sortOrder: 7, isActive: true },
+      { name: "Shots", description: "Single serve spirits", color: "#ef4444", icon: "💥", sortOrder: 8, isActive: true },
+      { name: "Irish", description: "Irish whiskey", color: "#84cc16", icon: "🍀", sortOrder: 9, isActive: true },
+      { name: "Rum", description: "Sugar cane based spirits", color: "#06b6d4", icon: "🌴", sortOrder: 10, isActive: true },
+      { name: "Gin", description: "Juniper-flavored spirit", color: "#a855f7", icon: "🌿", sortOrder: 11, isActive: true },
+      { name: "Mixer", description: "Non-alcoholic drink mixers", color: "#22c55e", icon: "🥤", sortOrder: 12, isActive: true },
+      { name: "Wine", description: "Red, white, and rose wines", color: "#dc2626", icon: "🍷", sortOrder: 13, isActive: true },
+    ];
+
+    const categoryDocs = await Category.insertMany(categories);
+    console.log(`✅ Seeded ${categoryDocs.length} categories`);
 
     // ==========================================
     // SEED PRODUCTS (INVENTORY)
@@ -249,6 +274,7 @@ const seedData = async () => {
     console.log("🎉 Database seeding completed!");
     console.log("");
     console.log("📊 Collection Summary:");
+    console.log(`   - Categories: ${categoryDocs.length}`);
     console.log(`   - Customers: ${customerDocs.length}`);
     console.log(`   - Products: ${productDocs.length}`);
     console.log(`   - Staff: ${staffDocs.length}`);

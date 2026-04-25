@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import bcrypt from "bcryptjs";
 
 // ============================================
 // USER SCHEMA (AUTHENTICATION)
@@ -27,7 +28,7 @@ const UserSchema = new Schema<IUser>({
     required: true,
   },
   phone: String,
-  branchId: { type: String, default: "001" },
+  branchId: { type: String },
   isActive: { type: Boolean, default: true },
   lastLogin: Date,
 }, { timestamps: true });
@@ -36,10 +37,9 @@ UserSchema.index({ email: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ isActive: 1 });
 
-// Hash password before saving using dynamic import
+// Hash password before saving
 UserSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
-  
   try {
     const bcrypt = (await import("bcryptjs")).default;
     const salt = await bcrypt.genSalt(12);
@@ -49,7 +49,7 @@ UserSchema.pre("save", async function () {
   }
 });
 
-// Compare password method using dynamic import
+// Compare password method
 UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   try {
     const bcrypt = (await import("bcryptjs")).default;
@@ -58,6 +58,33 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
     return false;
   }
 };
+
+// ============================================
+// CATEGORY SCHEMA (PRODUCT CATEGORIES)
+// ============================================
+export interface ICategory extends Document {
+  name: string;
+  description?: string;
+  color: string;
+  icon?: string;
+  sortOrder: number;
+  isActive: boolean;
+  parentId?: mongoose.Types.ObjectId;
+}
+
+const CategorySchema = new Schema<ICategory>({
+  name: { type: String, required: true, unique: true, trim: true },
+  description: { type: String, default: "" },
+  color: { type: String, default: "#64748b" },
+  icon: { type: String, default: "" },
+  sortOrder: { type: Number, default: 0 },
+  isActive: { type: Boolean, default: true },
+  parentId: { type: Schema.Types.ObjectId, ref: "Category" },
+}, { timestamps: true });
+
+CategorySchema.index({ sortOrder: 1 });
+CategorySchema.index({ isActive: 1 });
+CategorySchema.index({ parentId: 1 });
 
 // ============================================
 // CUSTOMER SCHEMA
@@ -486,6 +513,7 @@ const HappyHourSchema = new Schema<IHappyHour>({
 // EXPORT MODELS
 // ============================================
 export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
+export const Category = mongoose.models.Category || mongoose.model<ICategory>("Category", CategorySchema);
 export const Customer = mongoose.models.Customer || mongoose.model<ICustomer>("Customer", CustomerSchema);
 export const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
 export const ProductUOM = mongoose.models.ProductUOM || mongoose.model<IProductUOM>("ProductUOM", ProductUOMSchema);
@@ -503,8 +531,10 @@ export const MPESATransaction = mongoose.models.MPESATransaction || mongoose.mod
 // Export all schemas for reference
 export const schemas = {
   User: UserSchema,
+  Category: CategorySchema,
   Customer: CustomerSchema,
   Product: ProductSchema,
+  ProductUOM: ProductUOMSchema,
   Order: OrderSchema,
   Staff: StaffSchema,
   Supplier: SupplierSchema,
