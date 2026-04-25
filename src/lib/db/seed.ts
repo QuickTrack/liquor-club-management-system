@@ -43,7 +43,7 @@ const seedData = async () => {
     // SEED CUSTOMERS
     // ==========================================
     const customers: Partial<ICustomer>[] = [
-      { name: "Walk-in Customer", phone: "", tier: "Bronze", creditLimit: 0, creditUsed: 0, points: 0, status: "Active" },
+      { name: "Walk-in Customer", phone: "+254 700 000 000", tier: "Bronze", creditLimit: 0, creditUsed: 0, points: 0, status: "Active" },
       { name: "John Doe", phone: "+254 712 345 678", email: "john@example.com", tier: "Gold", creditLimit: 10000, creditUsed: 2500, points: 4500, totalSpent: 45000, visits: 25, status: "Active", preferences: "Whiskey, Bourbon" },
       { name: "Jane Smith", phone: "+254 723 456 789", email: "jane@example.com", tier: "VIP", creditLimit: 50000, creditUsed: 12000, points: 15000, totalSpent: 120000, visits: 58, status: "Active", preferences: "Champagne, Cocktails" },
       { name: "Mike Johnson", phone: "+254 734 567 890", email: "mike@example.com", tier: "Silver", creditLimit: 5000, creditUsed: 0, points: 1850, totalSpent: 18500, visits: 12, status: "Active", preferences: "Beer, Shots" },
