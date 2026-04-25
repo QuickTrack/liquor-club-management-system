@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Sidebar } from "@/components/Sidebar";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Next.js Template",
-  description: "A minimal Next.js starter template",
+  title: "Liquor Club Management",
+  description: "Liquor Club Management System",
 };
 
 export default function RootLayout({
@@ -23,11 +25,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ThemeProvider>
+          <div 
+            className="min-h-screen transition-colors duration-300 relative"
+            style={{ backgroundColor: "rgb(var(--background))" }}
+          >
+            <Sidebar />
+            <main 
+              className="flex-1 p-6 overflow-y-auto transition-colors duration-300"
+              style={{ backgroundColor: "rgb(var(--background))" }}
+            >
+              {children}
+            </main>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );
