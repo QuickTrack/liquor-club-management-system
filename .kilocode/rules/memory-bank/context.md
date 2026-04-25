@@ -30,6 +30,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Real Backend API Routes**: Comprehensive REST API for all modules (Staff, Orders, Recipes, HappyHours, Licenses, Transactions, etc.)
 - [x] **M-Pesa Integration**: STK Push with full callback handling, transaction tracking, environment config
 - [x] **Category Manager**: Full CRUD for product categories with color picker, icon emoji, sort ordering, active flag, and dedicated UI page
+- [x] **Favicon Update**: Updated favicon to use GlassWater icon from sidebar navigation, added SVG favicon to public directory
 
 ## Current Structure
 
@@ -130,8 +131,10 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | 2026-04-25 | **Integrated M-Pesa STK Push** - Initiation endpoint, callback webhook, transaction tracking |
 | 2026-04-25 | **Fixed type errors** - bcryptjs types, NextRequest signatures, dynamic route handlers |
 | 2026-04-25 | **Lint & typecheck passing** - Updated .eslintrc to ignore worktrees, added disables |
-| 2026-04-26 | **Category Manager** - Added Category schema, CRUD API, UI page with color picker, icons, sorting, and sidebar navigation |
 | 2026-04-26 | **Sidebar Redesign** - Clean white aesthetic with high-contrast green CTA buttons, 256px width, refined typography |
+| 2026-04-26 | **Category Manager** - Added Category schema, CRUD API, UI page with color picker, icons, sorting, and sidebar navigation |
+| 2026-04-26 | **Waiter Handover SOP** - Comprehensive Standard Operating Procedure for inventory accuracy and financial accountability with 6 standardized forms |
+| 2026-04-26 | **Favicon Update** - Updated favicon to use GlassWater icon from sidebar navigation, added SVG favicon to public directory |
 
 ## Quick Start Guide
 
