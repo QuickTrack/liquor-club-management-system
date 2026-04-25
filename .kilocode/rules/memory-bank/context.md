@@ -29,8 +29,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Authentication System**: JWT-based auth with login/logout/refresh, User model with roles, protected middleware, AuthContext
 - [x] **Real Backend API Routes**: Comprehensive REST API for all modules (Staff, Orders, Recipes, HappyHours, Licenses, Transactions, etc.)
 - [x] **M-Pesa Integration**: STK Push with full callback handling, transaction tracking, environment config
-- [x] **Type Safety**: All TypeScript errors resolved, bcryptjs types added
-- [x] **Lint**: ESLint passing with worktree ignores
+- [x] **Category Manager**: Full CRUD for product categories with color picker, icon emoji, sort ordering, active flag, and dedicated UI page
 
 ## Current Structure
 
@@ -46,6 +45,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | `src/app/staff/page.tsx` | Staff Management | ✅ Ready |
 | `src/app/reports/page.tsx` | Reports & Analytics | ✅ Ready |
 | `src/app/financial/page.tsx` | Financial Management | ✅ Ready |
+| `src/app/categories/page.tsx` | Category Manager | ✅ Ready |
 | `src/app/suppliers/page.tsx` | Supplier Management | ✅ Ready |
 | `src/app/compliance/page.tsx` | Compliance & Regulatory | ✅ Ready |
 | `src/app/alerts/page.tsx` | Alerts & Notifications | ✅ Ready |
@@ -59,6 +59,8 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | `GET /api/auth/me` | Get current user |
 | `POST /api/auth/refresh` | Refresh access token |
 | `POST /api/auth/logout` | Logout (clears cookie) |
+| `GET/POST /api/categories` | Categories list/create |
+| `GET/PATCH/DELETE /api/categories/[id]` | Category detail/update/delete |
 | `GET/POST /api/staff` | Staff CRUD |
 | `GET/POST /api/orders` | Orders with filters |
 | `GET/POST /api/recipes` | Recipes list/create |
@@ -85,6 +87,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | Model | Description |
 |-------|-------------|
 | `User` | Authentication (email, password hash, role) |
+| `Category` | Product categories with color, icon, sort order |
 | `Customer` | Loyalty tiers, credit, points |
 | `Product` | Inventory with stock, pricing |
 | `ProductUOM` | Unit of measure conversions |
@@ -125,8 +128,10 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | 2026-04-25 | **Added JWT authentication system** - User schema, token management, login/logout/refresh endpoints |
 | 2026-04-25 | **Built comprehensive REST API** - Staff, Orders, Recipes, HappyHours, Licenses, Transactions |
 | 2026-04-25 | **Integrated M-Pesa STK Push** - Initiation endpoint, callback webhook, transaction tracking |
-| 2026-04-25 | **Fixed type errors** - bcryptjs types, NextRequest usage, dynamic route handlers |
+| 2026-04-25 | **Fixed type errors** - bcryptjs types, NextRequest signatures, dynamic route handlers |
 | 2026-04-25 | **Lint & typecheck passing** - Updated .eslintrc to ignore worktrees, added disables |
+| 2026-04-26 | **Category Manager** - Added Category schema, CRUD API, UI page with color picker, icons, sorting, and sidebar navigation |
+| 2026-04-26 | **Sidebar Redesign** - Clean white aesthetic with high-contrast green CTA buttons, 256px width, refined typography |
 
 ## Quick Start Guide
 
@@ -155,9 +160,10 @@ bun run src/lib/db/seed.ts
 8. Suppliers - Purchase orders, credit management
 9. Compliance - KRA excise, licenses, audit trail
 10. Alerts - Low stock, fraud detection, notifications
-11. **Authentication** - JWT, role-based access control
-12. **API** - REST endpoints for all modules
-13. **M-Pesa** - STK Push integration ready
+11. **Categories** - Visual category manager with color picker, icons, sorting, and active/inactive toggle
+12. **Authentication** - JWT, role-based access control
+13. **API** - REST endpoints for all modules
+14. **M-Pesa** - STK Push integration ready
 
 ## Configuration
 
