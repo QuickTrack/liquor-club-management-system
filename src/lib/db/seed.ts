@@ -8,6 +8,7 @@ import {
   Transaction,
   License,
   HappyHour,
+  User,
   IHappyHour,
   IRecipe,
   IProduct,
@@ -16,6 +17,7 @@ import {
   ISupplier,
   ITransaction,
   ILicense,
+  IUser,
 } from "./models";
 
 const seedData = async () => {
@@ -29,6 +31,7 @@ const seedData = async () => {
     await Customer.deleteMany({});
     await Product.deleteMany({});
     await Staff.deleteMany({});
+    await User.deleteMany({});
     await Supplier.deleteMany({});
     await Recipe.deleteMany({});
     await Transaction.deleteMany({});
@@ -91,6 +94,83 @@ const seedData = async () => {
 
     const staffDocs = await Staff.insertMany(staff);
     console.log(`✅ Seeded ${staffDocs.length} staff members`);
+
+    // ==========================================
+    // SEED USERS (AUTHENTICATION)
+    // ==========================================
+    const bcrypt = require("bcryptjs");
+    
+    // Hash password: "password123"
+    const defaultPassword = await bcrypt.hash("password123", 12);
+    
+    const users: Partial<IUser>[] = [
+      {
+        email: "admin@example.com",
+        password: defaultPassword,
+        name: "Super Admin",
+        role: "Super Admin",
+        phone: "+254 700 000 000",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "james@club.com",
+        password: defaultPassword,
+        name: "James Wilson",
+        role: "Admin",
+        phone: "+254 700 111 111",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "mary@club.com",
+        password: defaultPassword,
+        name: "Mary Okonkwo",
+        role: "Manager",
+        phone: "+254 700 222 222",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "david@club.com",
+        password: defaultPassword,
+        name: "David Kiprop",
+        role: "Cashier",
+        phone: "+254 700 333 333",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "faith@club.com",
+        password: defaultPassword,
+        name: "Faith Kemunto",
+        role: "Bartender",
+        phone: "+254 700 444 444",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "paul@club.com",
+        password: defaultPassword,
+        name: "Paul Ochieng",
+        role: "Bartender",
+        phone: "+254 700 555 555",
+        branchId: "001",
+        isActive: true,
+      },
+      {
+        email: "grace@club.com",
+        password: defaultPassword,
+        name: "Grace Akinyi",
+        role: "Waiter",
+        phone: "+254 700 666 666",
+        branchId: "001",
+        isActive: true,
+      },
+    ];
+
+    const userDocs = await User.insertMany(users);
+    console.log(`✅ Seeded ${userDocs.length} users`);
 
     // ==========================================
     // SEED SUPPLIERS
@@ -172,6 +252,7 @@ const seedData = async () => {
     console.log(`   - Customers: ${customerDocs.length}`);
     console.log(`   - Products: ${productDocs.length}`);
     console.log(`   - Staff: ${staffDocs.length}`);
+    console.log(`   - Users: ${userDocs.length}`);
     console.log(`   - Suppliers: ${supplierDocs.length}`);
     console.log(`   - Recipes: ${recipeDocs.length}`);
     console.log(`   - Transactions: ${transactionDocs.length}`);

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/components/AuthContext";
 import {
   LayoutDashboard,
   Package,
@@ -18,6 +19,8 @@ import {
   Bell,
   Settings,
   GlassWater,
+  LogOut,
+  User,
 } from "lucide-react";
 
 const navItems = [
@@ -38,6 +41,7 @@ const navItems = [
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const { user, logout, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -74,6 +78,7 @@ export function Sidebar() {
             Liquor Club
           </span>
         </div>
+        
         <nav className="space-y-1 flex-1 overflow-y-auto">
           {navItems.map((item) => (
             <Link
@@ -87,10 +92,40 @@ export function Sidebar() {
             </Link>
           ))}
         </nav>
-        <div
-          className="mt-4 pt-4"
-          style={{ borderTopColor: "rgb(var(--border))" }}
-        >
+
+        <div className="mt-4 pt-4" style={{ borderTopColor: "rgb(var(--border))" }}>
+          {isAuthenticated && user ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-neutral-800/50">
+                <div className="p-2 rounded-full bg-amber-500/10">
+                  <User className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-neutral-400 truncate">
+                    {user.role}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800/50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="text-sm">Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="sidebar-item justify-center"
+              style={{ color: "rgb(var(--muted-foreground))" }}
+            >
+              Sign In
+            </Link>
+          )}
           <ThemeToggle />
         </div>
       </aside>

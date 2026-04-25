@@ -12,15 +12,24 @@ import {
   Filter,
   Download,
   Edit,
+  Scale,
 } from "lucide-react";
-import { AddProductModal, EditProductModal } from "@/components/AddProductModal";
+import { AddProductModal } from "@/components/AddProductModal";
+
+interface UnitConversion {
+  unit: string;
+  conversionFactor: number;
+  sellPrice: number;
+  costPrice?: number;
+}
 
 interface Product {
   id: number;
   name: string;
   category: string;
-  stock: number;
-  unit: string;
+  baseUnit: string;
+  stockQuantity: number;
+  alternateUnits: UnitConversion[];
   reorderLevel: number;
   costPrice: number;
   sellPrice: number;
@@ -31,20 +40,148 @@ interface Product {
 }
 
 const products: Product[] = [
-  { id: 1, name: "Jack Daniel's Old No. 7", category: "Bourbon", stock: 24, unit: "bottles", reorderLevel: 10, costPrice: 2000, sellPrice: 3000, supplier: "Kenya Breweries", status: "In Stock" },
-  { id: 2, name: "Grey Goose Vodka", category: "Vodka", stock: 18, unit: "bottles", reorderLevel: 10, costPrice: 3000, sellPrice: 4500, supplier: "EABL", status: "In Stock" },
-  { id: 3, name: "Moet & Chandon", category: "Champagne", stock: 0, unit: "bottles", reorderLevel: 5, costPrice: 8000, sellPrice: 12000, supplier: "French Wines", status: "Out of Stock" },
-  { id: 4, name: "Johnnie Walker Blue", category: "Scotch", stock: 12, unit: "bottles", reorderLevel: 8, costPrice: 15000, sellPrice: 20000, supplier: "EABL", status: "In Stock" },
-  { id: 5, name: "Patron Silver Tequila", category: "Tequila", stock: 6, unit: "bottles", reorderLevel: 10, costPrice: 3500, sellPrice: 4500, supplier: "MexImports", status: "Low Stock" },
-  { id: 6, name: "Hennessy VS", category: "Cognac", stock: 8, unit: "bottles", reorderLevel: 10, costPrice: 2800, sellPrice: 4000, supplier: "EABL", status: "Low Stock" },
-  { id: 7, name: "Heineken Draft", category: "Beer", stock: 50, unit: "kegs", reorderLevel: 20, costPrice: 2500, sellPrice: 3500, supplier: "Kenya Breweries", status: "In Stock" },
-  { id: 8, name: "Guinness", category: "Beer", stock: 30, unit: "crates", reorderLevel: 15, costPrice: 1800, sellPrice: 2500, supplier: "Kenya Breweries", status: "In Stock" },
-  { id: 9, name: "Vodka Shots", category: "Shots", stock: 200, unit: "shots", reorderLevel: 100, costPrice: 50, sellPrice: 100, supplier: "EABL", status: "In Stock" },
-  { id: 10, name: "Tequila Shots", category: "Shots", stock: 80, unit: "shots", reorderLevel: 100, costPrice: 80, sellPrice: 150, supplier: "MexImports", status: "Low Stock" },
+  {
+    id: 1,
+    name: "Jack Daniel's Old No. 7",
+    category: "Bourbon",
+    baseUnit: "bottle",
+    stockQuantity: 24,
+    reorderLevel: 10,
+    costPrice: 2000,
+    sellPrice: 3000,
+    supplier: "Kenya Breweries",
+    alternateUnits: [
+      { unit: "6-Pack", conversionFactor: 6, sellPrice: 18000, costPrice: 12000 },
+      { unit: "Case", conversionFactor: 12, sellPrice: 36000, costPrice: 24000 },
+    ],
+    status: "In Stock",
+  },
+  {
+    id: 2,
+    name: "Grey Goose Vodka",
+    category: "Vodka",
+    baseUnit: "bottle",
+    stockQuantity: 18,
+    reorderLevel: 10,
+    costPrice: 3000,
+    sellPrice: 4500,
+    supplier: "EABL",
+    alternateUnits: [],
+    status: "In Stock",
+  },
+  {
+    id: 3,
+    name: "Moet & Chandon",
+    category: "Champagne",
+    baseUnit: "bottle",
+    stockQuantity: 0,
+    reorderLevel: 5,
+    costPrice: 8000,
+    sellPrice: 12000,
+    supplier: "French Wines",
+    alternateUnits: [
+      { unit: "Half-Case", conversionFactor: 6, sellPrice: 72000, costPrice: 48000 },
+    ],
+    status: "Out of Stock",
+  },
+  {
+    id: 4,
+    name: "Johnnie Walker Blue",
+    category: "Scotch",
+    baseUnit: "bottle",
+    stockQuantity: 12,
+    reorderLevel: 8,
+    costPrice: 15000,
+    sellPrice: 20000,
+    supplier: "EABL",
+    alternateUnits: [],
+    status: "In Stock",
+  },
+  {
+    id: 5,
+    name: "Patron Silver Tequila",
+    category: "Tequila",
+    baseUnit: "bottle",
+    stockQuantity: 6,
+    reorderLevel: 10,
+    costPrice: 3500,
+    sellPrice: 4500,
+    supplier: "MexImports",
+    alternateUnits: [],
+    status: "Low Stock",
+  },
+  {
+    id: 6,
+    name: "Hennessy VS",
+    category: "Cognac",
+    baseUnit: "bottle",
+    stockQuantity: 8,
+    reorderLevel: 10,
+    costPrice: 2800,
+    sellPrice: 4000,
+    supplier: "EABL",
+    alternateUnits: [],
+    status: "Low Stock",
+  },
+  {
+    id: 7,
+    name: "Heineken Draft",
+    category: "Beer",
+    baseUnit: "keg",
+    stockQuantity: 50,
+    reorderLevel: 20,
+    costPrice: 2500,
+    sellPrice: 3500,
+    supplier: "Kenya Breweries",
+    alternateUnits: [
+      { unit: "Half-Keg", conversionFactor: 0.5, sellPrice: 1750, costPrice: 1250 },
+    ],
+    status: "In Stock",
+  },
+  {
+    id: 8,
+    name: "Guinness",
+    category: "Beer",
+    baseUnit: "crate",
+    stockQuantity: 30,
+    reorderLevel: 15,
+    costPrice: 1800,
+    sellPrice: 2500,
+    supplier: "Kenya Breweries",
+    alternateUnits: [],
+    status: "In Stock",
+  },
+  {
+    id: 9,
+    name: "Vodka Shots",
+    category: "Shots",
+    baseUnit: "shot",
+    stockQuantity: 200,
+    reorderLevel: 100,
+    costPrice: 50,
+    sellPrice: 100,
+    supplier: "EABL",
+    alternateUnits: [
+      { unit: "50ml", conversionFactor: 1, sellPrice: 100, costPrice: 50 },
+    ],
+    status: "In Stock",
+  },
+  {
+    id: 10,
+    name: "Tequila Shots",
+    category: "Shots",
+    baseUnit: "shot",
+    stockQuantity: 80,
+    reorderLevel: 100,
+    costPrice: 80,
+    sellPrice: 150,
+    supplier: "MexImports",
+    alternateUnits: [],
+    status: "Low Stock",
+  },
 ];
 
 const categories = ["All", "Bourbon", "Vodka", "Scotch", "Champagne", "Cognac", "Tequila", "Beer", "Shots"];
-const units = ["bottles", "shots", "kegs", "crates"];
 
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,15 +193,15 @@ export default function InventoryPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productList, setProductList] = useState<Product[]>(products);
 
-  const handleAddProduct = (newProduct: Omit<Product, "id" | "status">) => {
-    const product: Product = {
-      ...newProduct,
-      id: Date.now(),
-      status: newProduct.stock === 0 ? "Out of Stock" : newProduct.stock <= newProduct.reorderLevel ? "Low Stock" : "In Stock",
+  const handleAddProduct = (newProduct: Omit<Product, "id" | "status"> ) => {
+      const product: Product = {
+        ...newProduct,
+        id: Date.now(),
+        status: newProduct.stockQuantity === 0 ? "Out of Stock" : newProduct.stockQuantity <= newProduct.reorderLevel ? "Low Stock" : "In Stock",
+      };
+      setProductList([...productList, product]);
+      setShowAddProduct(false);
     };
-    setProductList([...productList, product]);
-    setShowAddProduct(false);
-  };
 
   const handleEditProduct = (updated: Product) => {
     setProductList(productList.map(p => p.id === updated.id ? updated : p));
@@ -75,20 +212,33 @@ export default function InventoryPage() {
   const filteredProducts = productList.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "All" || p.category === selectedCategory;
-    const matchesLowStock = !showLowStock || p.stock <= p.reorderLevel;
+    const matchesLowStock = !showLowStock || p.stockQuantity <= p.reorderLevel;
     return matchesSearch && matchesCategory && matchesLowStock;
   });
 
-  const totalValue = productList.reduce((sum, p) => sum + p.stock * p.costPrice, 0);
-  const lowStockCount = productList.filter((p) => p.stock <= p.reorderLevel).length;
-  const outOfStockCount = productList.filter((p) => p.stock === 0).length;
+  const totalValue = productList.reduce((sum, p) => sum + p.stockQuantity * p.costPrice, 0);
+  const lowStockCount = productList.filter((p) => p.stockQuantity <= p.reorderLevel).length;
+  const outOfStockCount = productList.filter((p) => p.stockQuantity === 0).length;
+
+  // Calculate stock in specific unit for display
+  const getStockDisplay = (product: Product, unit?: string): string => {
+    if (!unit || unit === product.baseUnit) {
+      return `${product.stockQuantity} ${product.baseUnit}s`;
+    }
+    const altUnit = product.alternateUnits.find(u => u.unit === unit);
+    if (altUnit) {
+      const convertedQty = Math.round(product.stockQuantity / altUnit.conversionFactor * 100) / 100;
+      return `${convertedQty} ${unit}`;
+    }
+    return `${product.stockQuantity} ${product.baseUnit}s`;
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Inventory & Stock Control</h1>
-          <p className="text-gray-400">Real-time stock tracking and management</p>
+          <p className="text-gray-400">Real-time stock tracking with multi-unit support</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-2 bg-neutral-700 hover:bg-neutral-600 text-white px-4 py-2 rounded-lg transition-colors">
@@ -209,8 +359,9 @@ export default function InventoryPage() {
               <tr className="border-b border-neutral-700">
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Product</th>
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Category</th>
-                <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Stock</th>
+                <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Stock (Base Unit)</th>
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Unit</th>
+                <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Alt Units</th>
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Cost</th>
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Sell</th>
                 <th className="text-left text-gray-400 px-4 py-3 text-sm font-medium">Reorder</th>
@@ -225,11 +376,27 @@ export default function InventoryPage() {
                   <td className="px-4 py-3 text-white font-medium">{product.name}</td>
                   <td className="px-4 py-3 text-gray-300">{product.category}</td>
                   <td className="px-4 py-3">
-                    <span className={product.stock <= product.reorderLevel ? "text-yellow-500 font-bold" : "text-gray-300"}>
-                      {product.stock}
+                    <span className={product.stockQuantity <= product.reorderLevel ? "text-yellow-500 font-bold" : "text-gray-300"}>
+                      {product.stockQuantity}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-300">{product.unit}</td>
+                  <td className="px-4 py-3 text-gray-300">{product.baseUnit}</td>
+                  <td className="px-4 py-3">
+                    {product.alternateUnits.length > 0 ? (
+                      <div className="space-y-1">
+                        {product.alternateUnits.slice(0, 2).map((au, idx) => (
+                          <span key={idx} className="block text-xs text-blue-400">
+                            1 {au.unit} = {au.conversionFactor} {product.baseUnit}s
+                          </span>
+                        ))}
+                        {product.alternateUnits.length > 2 && (
+                          <span className="text-xs text-gray-400">+{product.alternateUnits.length - 2} more</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500 text-sm">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-300">Ksh {product.costPrice.toLocaleString()}</td>
                   <td className="px-4 py-3 text-gray-300">Ksh {product.sellPrice.toLocaleString()}</td>
                   <td className="px-4 py-3 text-gray-400">{product.reorderLevel}</td>
@@ -241,7 +408,7 @@ export default function InventoryPage() {
                           ? "bg-green-500/10 text-green-500"
                           : product.status === "Out of Stock"
                           ? "bg-red-500/10 text-red-500"
-                          : "bg-blue-500/10 text-blue-500"
+                          : "bg-yellow-500/10 text-yellow-500"
                       }`}
                     >
                       {product.status}
@@ -287,33 +454,59 @@ export default function InventoryPage() {
                   {product.status}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
+
+              {/* Base Unit Info */}
+              <div className="bg-neutral-700/30 rounded-lg p-3 mb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm text-gray-400">Base Unit:</span>
+                  </div>
+                  <span className="text-sm font-medium text-white capitalize">{product.baseUnit}</span>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-white">{product.stockQuantity}</span>
+                  <span className="text-gray-400">{product.baseUnit}s</span>
+                </div>
+              </div>
+
+              {/* Alternate Units */}
+              {product.alternateUnits.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs text-gray-400 mb-2">Alternate Units:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {product.alternateUnits.map((au, idx) => (
+                      <div key={idx} className="bg-neutral-700/30 rounded p-2 border border-neutral-600/50">
+                        <div className="text-xs font-medium text-blue-300">{au.unit}</div>
+                        <div className="text-xs text-gray-300 mt-1">
+                          1 {au.unit} = {au.conversionFactor} {product.baseUnit}s
+                        </div>
+                        <div className="text-xs text-green-400 mt-1">
+                          Ksh {au.sellPrice.toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 text-sm pt-3 border-t border-neutral-700">
                 <div>
-                  <p className="text-gray-400">Stock</p>
-                  <p className="text-white font-bold">{product.stock} {product.unit}</p>
+                  <p className="text-gray-400">Cost / {product.baseUnit}</p>
+                  <p className="text-white font-bold">Ksh {product.costPrice.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-gray-400">Sell / {product.baseUnit}</p>
+                  <p className="text-white font-bold">Ksh {product.sellPrice.toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-gray-400">Reorder Level</p>
-                  <p className="text-gray-300">{product.reorderLevel}</p>
+                  <p className="text-gray-300">{product.reorderLevel} {product.baseUnit}s</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Cost Price</p>
-                  <p className="text-gray-300">Ksh {product.costPrice.toLocaleString()}</p>
+                  <p className="text-gray-400">Stock Value</p>
+                  <p className="text-green-400 font-bold">Ksh {(product.stockQuantity * product.costPrice).toLocaleString()}</p>
                 </div>
-                <div>
-                  <p className="text-gray-400">Sell Price</p>
-                  <p className="text-gray-300">Ksh {product.sellPrice.toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-neutral-700 flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-neutral-700 text-gray-300 rounded text-sm hover:bg-neutral-600">
-                  <ArrowDownUp className="w-3 h-3" />
-                  Transfer
-                </button>
-                <button className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-neutral-700 text-gray-300 rounded text-sm hover:bg-neutral-600">
-                  <RefreshCw className="w-3 h-3" />
-                  Reorder
-                </button>
               </div>
             </div>
           ))}
@@ -352,15 +545,21 @@ export default function InventoryPage() {
         />
       )}
 
-      {/* Edit Product Modal */}
-      {showEditProduct && editingProduct && (
-        <EditProductModal
-          product={editingProduct}
-          onClose={() => { setShowEditProduct(false); setEditingProduct(null); }}
-          onSave={handleEditProduct}
-          categories={categories.filter(c => c !== "All")}
-        />
-      )}
+       {/* Edit Product Modal */}
+       {showEditProduct && editingProduct && (
+         <AddProductModal
+           onClose={() => { setShowEditProduct(false); setEditingProduct(null); }}
+           onSave={(updated) => {
+             setProductList(productList.map(p => p.id === editingProduct.id 
+               ? { ...updated, id: editingProduct.id, status: editingProduct.status }
+               : p
+             ));
+             setShowEditProduct(false);
+             setEditingProduct(null);
+           }}
+           categories={categories.filter(c => c !== "All")}
+         />
+       )}
     </div>
   );
 }

@@ -294,12 +294,12 @@ export default function SuppliersPage() {
 ) : products.length === 0 ? (
                 <div className="text-center py-8 mb-4">
                   <p className="text-yellow-500 mb-2">No products in database</p>
-                  <p className="text-gray-400 text-sm mb-4">Click "Seed Database" button below</p>
+                  <p className="text-gray-400 text-sm mb-4">Click &quot;Seed Database&quot; button below</p>
                 </div>
               ) : (
                 <div className="space-y-3 mb-4">
                 {orderItems.length === 0 ? (
-                  <p className="text-gray-400 text-center py-4">No items. Click "+ Add Item" to add products.</p>
+                   <p className="text-gray-400 text-center py-4">No items. Click &quot;+ Add Item&quot; to add products.</p>
                 ) : orderItems.map((item, idx) => (
                   <div key={idx} className="flex gap-2 items-center">
                     <select

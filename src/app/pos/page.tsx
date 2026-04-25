@@ -51,7 +51,14 @@ interface Customer {
   points: number;
 }
 
-const customers: Customer[] = [
+const tierDiscounts: Record<Customer["tier"], number> = {
+  Bronze: 0,
+  Silver: 0,
+  Gold: 0,
+  VIP: 0,
+};
+
+const initialCustomers: Customer[] = [
   { id: 1, name: "Walk-in Customer", phone: "", tier: "Bronze", creditLimit: 0, creditUsed: 0, points: 0 },
   { id: 2, name: "John Doe", phone: "+254 712 345 678", tier: "Gold", creditLimit: 10000, creditUsed: 2500, points: 4500 },
   { id: 3, name: "Jane Smith", phone: "+254 723 456 789", tier: "VIP", creditLimit: 50000, creditUsed: 12000, points: 15000 },
@@ -60,13 +67,6 @@ const customers: Customer[] = [
   { id: 6, name: "Tom Brown", phone: "+254 756 789 012", tier: "Gold", creditLimit: 15000, creditUsed: 3000, points: 6500 },
   { id: 7, name: "Emily Davis", phone: "+254 767 890 123", tier: "VIP", creditLimit: 30000, creditUsed: 8000, points: 10500 },
 ];
-
-const tierDiscounts: Record<Customer["tier"], number> = {
-  Bronze: 0,
-  Silver: 0,
-  Gold: 0,
-  VIP: 0,
-};
 
 const products = [
   { id: 1, name: "Jack Daniel's", price: 300, category: "Bourbon", stock: 24 },
@@ -97,7 +97,15 @@ function generateOrderId() {
 
 const initialOrder: Order = {
   id: "",
-  customer: customers[0],
+  customer: {
+    id: 1,
+    name: "Walk-in Customer",
+    phone: "",
+    tier: "Bronze",
+    creditLimit: 0,
+    creditUsed: 0,
+    points: 0,
+  },
   items: [],
   subtotal: 0,
   tierDiscount: 0,
@@ -116,26 +124,11 @@ function getOrderId(customerName: string) {
 export default function POSPage() {
   const [currentOrder, setCurrentOrder] = useState<Order>(initialOrder);
   const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const walkInCustomer = customers[0];
-    setCurrentOrder({
-      id: getOrderId(walkInCustomer.name),
-      customer: walkInCustomer,
-      items: [],
-      subtotal: 0,
-      tierDiscount: 0,
-      tax: 0,
-      total: 0,
-      status: "draft",
-      createdAt: new Date().toISOString(),
-    });
-    setMounted(true);
-  }, []);
-
   const [heldOrders, setHeldOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [activeCategory, setActiveCategory] = useState("All");
   const [isHappyHour, setIsHappyHour] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
   
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "account">("cash");
   const [showReceipt, setShowReceipt] = useState(false);
@@ -146,6 +139,52 @@ export default function POSPage() {
   const [billedOrder, setBilledOrder] = useState<Order | null>(null);
   const [changeAmount, setChangeAmount] = useState("");
   const [showChangeInput, setShowChangeInput] = useState(false);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    tier: "Bronze" as "Bronze" | "Silver" | "Gold" | "VIP",
+  });
+  const [customerError, setCustomerError] = useState<string>("");
+
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const response = await fetch("/api/customers");
+        if (response.ok) {
+          const data = await response.json();
+          setCustomers(data);
+        } else {
+          console.error("Failed to fetch customers, using initial data");
+        }
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  useEffect(() => {
+    if (!loadingCustomers && !mounted && customers.length > 0) {
+      const walkInCustomer = customers[0];
+      setCurrentOrder({
+        id: getOrderId(walkInCustomer.name),
+        customer: walkInCustomer,
+        items: [],
+        subtotal: 0,
+        tierDiscount: 0,
+        tax: 0,
+        total: 0,
+        status: "draft",
+        createdAt: new Date().toISOString(),
+      });
+      setMounted(true);
+    }
+  }, [loadingCustomers, mounted, customers]);
 
   const filteredProducts = products.filter((p) => {
     const matchesCategory = activeCategory === "All" || p.category === activeCategory;
@@ -161,6 +200,45 @@ export default function POSPage() {
     const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const tax = subtotal * 0.16;
     setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal, tierDiscount: 0, tax, total: subtotal + tax });
+  };
+
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
+      setCustomerError("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newCustomer.name.trim(),
+          phone: newCustomer.phone.trim(),
+          email: newCustomer.email.trim(),
+          tier: newCustomer.tier,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to create customer");
+      }
+
+      const createdCustomer = await response.json();
+      setCustomers([...customers, createdCustomer]);
+      setNewCustomer({
+        name: "",
+        phone: "",
+        email: "",
+        tier: "Bronze",
+      });
+      setCustomerError("");
+      setShowNewCustomer(false);
+      setCustomerSearch("");
+    } catch (error: any) {
+      setCustomerError(error.message || "Failed to create customer");
+    }
   };
 
   const addToOrder = (product: typeof products[0]) => {
@@ -323,18 +401,60 @@ const completeSale = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-neutral-800 rounded-xl p-6 w-[450px] border border-neutral-700">
             <div className="flex items-center justify-between mb-4"><h2 className="text-xl font-bold text-white">Select Customer</h2><button onClick={() => setShowCustomerSelect(false)} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            <div className="relative mb-4"><Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:border-amber-500" /></div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {customers.filter((c) => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)).map((customer) => (
-                <button key={customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); setCustomerSearch(""); }} className={`w-full flex items-center justify-between p-3 rounded-lg text-left ${currentOrder.customer.id === customer.id ? "bg-blue-500 text-white" : "bg-neutral-700 text-white hover:bg-neutral-600"}`}>
-                  <div><p className="font-medium">{customer.name}</p><p className="text-sm opacity-70">{customer.phone || "Walk-in"}</p></div>
-                   <span className={`px-2 py-1 rounded-full text-xs ${customer.tier === "VIP" ? "bg-purple-500/30 text-purple-300" : customer.tier === "Gold" ? "bg-blue-500/30 text-yellow-300" : customer.tier === "Silver" ? "bg-gray-400/30 text-gray-300" : "bg-blue-700/30 text-amber-300"}`}>{customer.tier}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+             <div className="relative mb-4"><Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:border-amber-500" /></div>
+             <button onClick={() => setShowNewCustomer(!showNewCustomer)} className="w-full flex items-center justify-center gap-2 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 font-medium mb-4">
+               <Plus className="w-4 h-4" />
+               {showNewCustomer ? "Cancel" : "Add New Customer"}
+             </button>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                 {customers?.filter((c) => c?.name?.toLowerCase().includes(customerSearch.toLowerCase()) || c?.phone?.includes(customerSearch)).map((customer) => (
+                   <button key={customer?.id || Math.random()} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); setCustomerSearch(""); }} className={`w-full flex items-center justify-between p-3 rounded-lg text-left ${
+                     currentOrder.customer.id === customer?.id ? "bg-blue-500 text-white" : "bg-neutral-700 text-white hover:bg-neutral-600"
+                   }`}>
+                     <div><p className="font-medium">{customer?.name}</p><p className="text-sm opacity-70">{customer?.phone || "Walk-in"}</p></div>
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        customer?.tier === "VIP" ? "bg-purple-500/30 text-purple-300" : customer?.tier === "Gold" ? "bg-blue-500/30 text-yellow-300" : customer?.tier === "Silver" ? "bg-gray-400/30 text-gray-300" : "bg-blue-700/30 text-amber-300"
+                      }`}>{customer?.tier}</span>
+                   </button>
+                 )) || <p className="text-gray-500 text-sm">No customers found</p>}
+              </div>
+             {showNewCustomer && (
+               <div className="border-t border-neutral-700 pt-4 mt-4">
+                 <h3 className="text-sm font-medium text-gray-400 mb-3">Add New Customer</h3>
+                 <div className="space-y-3">
+                   <div>
+                     <label className="text-xs text-gray-500 mb-1 block">Name</label>
+                     <input type="text" placeholder="Customer name" value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500" />
+                   </div>
+                   <div className="grid grid-cols-2 gap-3">
+                     <div>
+                       <label className="text-xs text-gray-500 mb-1 block">Phone</label>
+                       <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500" />
+                     </div>
+                     <div>
+                       <label className="text-xs text-gray-500 mb-1 block">Tier</label>
+                       <select value={newCustomer.tier} onChange={(e) => setNewCustomer({ ...newCustomer, tier: e.target.value as "Bronze" | "Silver" | "Gold" | "VIP" })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500">
+                         <option value="Bronze">Bronze</option>
+                         <option value="Silver">Silver</option>
+                         <option value="Gold">Gold</option>
+                         <option value="VIP">VIP</option>
+                       </select>
+                     </div>
+                   </div>
+                   <div className="flex gap-2 pt-2">
+                     <button onClick={handleAddCustomer} disabled={!newCustomer.name.trim() || !newCustomer.phone.trim()} className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 font-medium">
+                       <Plus className="w-4 h-4" />
+                       Add Customer
+                     </button>
+                     <button onClick={() => setShowNewCustomer(false)} className="flex-1 py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 font-medium">Cancel</button>
+                   </div>
+                   {customerError && <p className="text-sm text-red-400">{customerError}</p>}
+                 </div>
+               </div>
+             )}
+           </div>
+         </div>
+       )}
 
       {/* Held Orders Modal */}
       {showHeldOrders && (

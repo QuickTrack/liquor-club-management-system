@@ -1,6 +1,65 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 // ============================================
+// USER SCHEMA (AUTHENTICATION)
+// ============================================
+export interface IUser extends Document {
+  email: string;
+  password: string;
+  name: string;
+  role: "Super Admin" | "Admin" | "Manager" | "Cashier" | "Bartender" | "Waiter" | "Auditor";
+  phone?: string;
+  branchId?: string;
+  isActive: boolean;
+  lastLogin?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+const UserSchema = new Schema<IUser>({
+  email: { type: String, required: true, unique: true, lowercase: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true },
+  role: {
+    type: String,
+    enum: ["Super Admin", "Admin", "Manager", "Cashier", "Bartender", "Waiter", "Auditor"],
+    required: true,
+  },
+  phone: String,
+  branchId: { type: String, default: "001" },
+  isActive: { type: Boolean, default: true },
+  lastLogin: Date,
+}, { timestamps: true });
+
+UserSchema.index({ email: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ isActive: 1 });
+
+// Hash password before saving using dynamic import
+UserSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+  
+  try {
+    const bcrypt = (await import("bcryptjs")).default;
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+  } catch (err) {
+    throw new Error("Password hashing failed: " + (err as Error).message);
+  }
+});
+
+// Compare password method using dynamic import
+UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  try {
+    const bcrypt = (await import("bcryptjs")).default;
+    return await bcrypt.compare(candidatePassword, this.password);
+  } catch {
+    return false;
+  }
+};
+
+// ============================================
 // CUSTOMER SCHEMA
 // ============================================
 export interface ICustomer extends Document {
@@ -75,6 +134,39 @@ const ProductSchema = new Schema<IProduct>({
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ status: 1 });
 ProductSchema.index({ name: "text" });
+
+// ============================================
+// PRODUCT UOM (UNIT OF MEASURE) SCHEMA
+// ============================================
+export interface IUnit {
+  name: string;
+  abbreviation: string;
+  isBase: boolean;
+  conversionFactor: number;
+  isActive: boolean;
+}
+
+export interface IProductUOM extends Document {
+  product: mongoose.Types.ObjectId;
+  baseUnit: string;
+  units: IUnit[];
+}
+
+const UnitSchema = new Schema<IUnit>({
+  name: { type: String, required: true },
+  abbreviation: { type: String, required: true },
+  isBase: { type: Boolean, default: false },
+  conversionFactor: { type: Number, required: true, min: 0.01 },
+  isActive: { type: Boolean, default: true },
+}, { _id: false });
+
+const ProductUOMSchema = new Schema<IProductUOM>({
+  product: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+  baseUnit: { type: String, required: true },
+  units: [UnitSchema],
+}, { timestamps: true });
+
+ProductUOMSchema.index({ product: 1 }, { unique: true });
 
 // ============================================
 // ORDER SCHEMA
@@ -330,6 +422,48 @@ const ExciseDutySchema = new Schema<IExciseDuty>({
 ExciseDutySchema.index({ date: -1 });
 
 // ============================================
+// MPESA TRANSACTION SCHEMA
+// ============================================
+export interface IMPESATransaction extends Document {
+  merchantRequestId: string;
+  checkoutRequestId: string;
+  phoneNumber: string;
+  amount: number;
+  accountReference: string;
+  transactionDesc: string;
+  status: "Pending" | "Completed" | "Failed" | "Cancelled";
+  resultCode?: number;
+  resultDesc?: string;
+  mpesaReceiptNumber?: string;
+  transactionDate?: Date;
+  metadata?: Record<string, any>;
+}
+
+const MPESATransactionSchema = new Schema<IMPESATransaction>({
+  merchantRequestId: { type: String, required: true },
+  checkoutRequestId: { type: String, required: true, unique: true },
+  phoneNumber: { type: String, required: true },
+  amount: { type: Number, required: true },
+  accountReference: { type: String, required: true },
+  transactionDesc: String,
+  status: {
+    type: String,
+    enum: ["Pending", "Completed", "Failed", "Cancelled"],
+    default: "Pending",
+  },
+  resultCode: Number,
+  resultDesc: String,
+  mpesaReceiptNumber: String,
+  transactionDate: Date,
+  metadata: Schema.Types.Mixed,
+}, { timestamps: true });
+
+MPESATransactionSchema.index({ checkoutRequestId: 1 });
+MPESATransactionSchema.index({ merchantRequestId: 1 });
+MPESATransactionSchema.index({ phoneNumber: 1 });
+MPESATransactionSchema.index({ status: 1 });
+
+// ============================================
 // HAPPY HOUR SCHEMA
 // ============================================
 export interface IHappyHour extends Document {
@@ -351,8 +485,10 @@ const HappyHourSchema = new Schema<IHappyHour>({
 // ============================================
 // EXPORT MODELS
 // ============================================
+export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
 export const Customer = mongoose.models.Customer || mongoose.model<ICustomer>("Customer", CustomerSchema);
 export const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
+export const ProductUOM = mongoose.models.ProductUOM || mongoose.model<IProductUOM>("ProductUOM", ProductUOMSchema);
 export const Order = mongoose.models.Order || mongoose.model<IOrder>("Order", OrderSchema);
 export const Staff = mongoose.models.Staff || mongoose.model<IStaff>("Staff", StaffSchema);
 export const Supplier = mongoose.models.Supplier || mongoose.model<ISupplier>("Supplier", SupplierSchema);
@@ -362,9 +498,11 @@ export const License = mongoose.models.License || mongoose.model<ILicense>("Lice
 export const AuditLog = mongoose.models.AuditLog || mongoose.model<IAuditLog>("AuditLog", AuditLogSchema);
 export const ExciseDuty = mongoose.models.ExciseDuty || mongoose.model<IExciseDuty>("ExciseDuty", ExciseDutySchema);
 export const HappyHour = mongoose.models.HappyHour || mongoose.model<IHappyHour>("HappyHour", HappyHourSchema);
+export const MPESATransaction = mongoose.models.MPESATransaction || mongoose.model<IMPESATransaction>("MPESATransaction", MPESATransactionSchema);
 
 // Export all schemas for reference
 export const schemas = {
+  User: UserSchema,
   Customer: CustomerSchema,
   Product: ProductSchema,
   Order: OrderSchema,
@@ -376,4 +514,5 @@ export const schemas = {
   AuditLog: AuditLogSchema,
   ExciseDuty: ExciseDutySchema,
   HappyHour: HappyHourSchema,
+  MPESATransaction: MPESATransactionSchema,
 };
