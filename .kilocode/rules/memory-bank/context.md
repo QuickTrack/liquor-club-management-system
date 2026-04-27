@@ -8,7 +8,8 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 
 ## Recently Completed
 
-- [x] **Alternate unit persistence and robustness**: Ensured sellPrice/costPrice are always present for all units via API backfill; fixed edit crash for legacy units; added migration script for one-time DB fix; added unit tests for pricing logic
+- [x] **Alternate unit persistence & robustness**: Fixed crashes when editing units with missing sellPrice/conversionFactor; added ensureUnitPrices utility to backfill missing prices from base product; GET /api/products now guarantees all units have valid pricing; created migration script to fix existing records; added unit and integration tests
+- [x] **Alternate unit editing**: Added inline edit functionality for alternate units in AddProductModal; users can now modify unit name, conversion factor, sell price, and cost price after creation; includes validation and duplicate name checking
 - [x] **Dynamic categories in AddProductModal**: Category dropdown now fetches active categories from the database via `/api/categories`; new categories can be added inline via POST to API
 - [x] **Product grid removal**: Completely removed products grid from POS; interface now consists of header, customer selector, search dropdown, category filters, and order cart that fills remaining viewport
 - [x] **Cart table format**: Reordered cart item display into single-row table layout with columns: Item Name (col-span-4), Unit selector (col-span-2), Unit Price (col-span-2, right-aligned), Quantity controls (col-span-2, centered), Line Total Amount (col-span-1, right-aligned), and Delete button (col-span-1)
@@ -42,9 +43,6 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Fixed unit price calculation**: Prices now correctly calculated based on base product price and unit conversion factor, eliminating rounding errors when switching between units
 - [x] **Product persistence**: AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format
 - [x] **Inventory data loading**: Inventory page now loads products from database on mount, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations
-- [x] **Alternate unit editing**: Added inline edit functionality for alternate units in AddProductModal; users can now modify unit name, conversion factor, sell price, and cost price after creation; includes validation and duplicate name checking
-- [x] **Alternate unit price backfill**: Fixed issue where legacy alternate units (created before sellPrice field existed) returned undefined prices in cart; GET /api/products now computes missing sellPrice from base product sellPrice * conversionFactor, ensuring all units have valid fixed prices in the shopping cart
-- [x] **Critical bug fix - Alternate unit persistence**: Resolved crash when editing units with missing sellPrice (startEditUnit now safely handles null/undefined); added ensureUnitPrices utility to backfill missing prices on read; created database migration script to permanently fix existing records
 
 ## Current Structure
 
@@ -96,29 +94,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | `src/components/ThemeToggle.tsx` | Toggle button |
 | `src/components/Sidebar.tsx` | Navigation sidebar with auth state |
 | `src/components/AuthContext.tsx` | Auth state provider |
-| `src/components/AddProductModal.tsx` | Multi-section product form |
-
-### Database Models (Mongoose)
-| Model | Description |
-|-------|-------------|
-| `User` | Authentication (email, password hash, role) |
-| `Category` | Product categories with color, icon, sort order |
-| `Customer` | Loyalty tiers, credit, points |
-| `Product` | Inventory with stock, pricing |
-| `ProductUOM` | Unit of measure conversions |
-| `Order` | Sales orders with items |
-| `Staff` | Employee management |
-| `Supplier` | Vendor database |
-| `Recipe` | Cocktail recipes |
-| `Transaction` | Income/expense |
-| `License` | Compliance permits |
-| `AuditLog` | Activity trail |
-| `ExciseDuty` | Tax compliance |
-| `HappyHour` | Time-based pricing |
-| `MPESATransaction` | Payment records |
-
-### Middleware
-- `middleware.ts` - Protects all routes except `/api/auth/*`, `/api/seed`, static assets
+| `src/components/AddProductModal.tsx` | Multi-section product form with inline alternate unit editing |
 
 ### Utilities
 | File | Purpose |
@@ -129,6 +105,14 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | `src/lib/db/connection.ts` | MongoDB connection |
 | `src/lib/db/models.ts` | All Mongoose schemas |
 | `src/lib/db/seed.ts` | Seed script with demo data (includes users) |
+| `src/lib/utils/uomPricing.ts` | ensureUnitPrices utility for backfill |
+| `src/lib/db/migrations/backfill-unit-prices.ts` | One-time migration to fix legacy unit pricing data |
+
+### Tests
+| File | Purpose |
+|------|---------|
+| `src/__tests__/uomPricing.test.ts` | Unit tests for uomPricing utility |
+| `src/__tests__/alternate-unit-persistence.test.ts` | Integration tests for unit persistence (create, update, backfill) |
 
 ## Session History
 
@@ -166,6 +150,16 @@ bun dev
 ### To seed the database:
 ```bash
 bun run src/lib/db/seed.ts
+```
+
+### To run the unit backfill migration (fixes legacy alternate unit pricing):
+```bash
+bun run src/lib/db/migrations/backfill-unit-prices.ts
+```
+
+### To run tests:
+```bash
+bun test
 ```
 
 ### Default login:
