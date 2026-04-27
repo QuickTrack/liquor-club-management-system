@@ -38,6 +38,18 @@ interface Product {
   expiryDate?: string;
   batchNo?: string;
   status: "In Stock" | "Low Stock" | "Out of Stock";
+  uom?: {
+    baseUnit: string;
+    units: Array<{
+      name: string;
+      abbreviation: string;
+      isBase: boolean;
+      conversionFactor: number;
+      isActive: boolean;
+      sellPrice: number;
+      costPrice?: number;
+    }>;
+  };
 }
 
 // Helper to transform API product data to frontend format
@@ -70,6 +82,11 @@ const transformProduct = (p: any): Product => {
     batchNo: p.batchNo,
     status: p.status as "In Stock" | "Low Stock" | "Out of Stock",
     alternateUnits,
+    // Include full UOM structure for POS and other consumers
+    uom: p.uom ? {
+      baseUnit: p.uom.baseUnit,
+      units: p.uom.units,
+    } : undefined,
   };
 };
 

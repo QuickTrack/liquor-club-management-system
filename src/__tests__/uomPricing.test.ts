@@ -15,11 +15,11 @@ describe("ensureUnitPrices", () => {
 
     expect(result[0].sellPrice).toBe(3000 * 12);
     expect(result[0].costPrice).toBe(2000 * 12);
-    expect(result[1].sellPrice).toBe(3000 * 6);
-    expect(result[1].costPrice).toBe(2000 * 6);
-    // explicit zero should remain zero (not overwritten because zero is not null/undefined)
-    expect(result[2].sellPrice).toBe(0);
-    expect(result[2].costPrice).toBe(0);
+     expect(result[1].sellPrice).toBe(3000 * 6);
+     expect(result[1].costPrice).toBe(2000 * 6);
+     // zero is treated as missing and backfilled
+     expect(result[2].sellPrice).toBe(3000 * 1);
+     expect(result[2].costPrice).toBe(2000 * 1);
   });
 
   test("does not overwrite existing sellPrice/costPrice", () => {

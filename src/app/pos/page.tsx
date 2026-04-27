@@ -174,12 +174,12 @@ export default function POSPage() {
            console.error("Failed to fetch customers, using initial data");
          }
          
-         if (productsRes.ok) {
-           const productsData = await productsRes.json();
-           setProducts(productsData);
-         } else {
-           console.error("Failed to fetch products, using initial data");
-         }
+          if (productsRes.ok) {
+            const productsData = await productsRes.json();
+            setProducts(productsData);
+          } else {
+            console.error("Failed to fetch products, using initial data");
+          }
        } catch (error) {
          console.error("Error fetching data:", error);
        } finally {
