@@ -8,9 +8,11 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 
 ## Recently Completed
 
-- [x] **Alternate unit persistence & robustness**: Fixed crashes when editing units with missing sellPrice/conversionFactor; added ensureUnitPrices utility to backfill missing prices from base product; GET /api/products now guarantees all units have valid pricing; created migration script to fix existing records; added unit and integration tests
-- [x] **Alternate unit editing**: Added inline edit functionality for alternate units in AddProductModal; users can now modify unit name, conversion factor, sell price, and cost price after creation; includes validation and duplicate name checking
-- [x] **Dynamic categories in AddProductModal**: Category dropdown now fetches active categories from the database via `/api/categories`; new categories can be added inline via POST to API
+- [x] **POS units not fetching - Critical Fix**: Resolved issue where alternate units were missing from cart dropdown due to isActive being undefined in legacy records; ensureUnitPrices now converts Mongoose subdocuments correctly using toObject() and backfills isActive, name, abbreviation, conversionFactor, isBase to safe defaults; sellPrice/costPrice also backfilled when zero (placeholder values)
+- [x] **Alternate unit persistence & robustness**: Ensured sellPrice/costPrice always present for all units via API backfill; fixed edit crash for legacy units; added migration script for one-time DB fix; added unit tests for pricing logic
+- [x] **Alternate unit editing**: Inline edit for alternate units in AddProductModal; modify name, conversion factor, sell price, cost price; includes validation and duplicate name checking
+- [x] **Dynamic categories**: AddProductModal fetches categories from `/api/categories`; inline creation via POST
+- [x] **Product grid removal**: POS interface simplified to header, customer selector, search dropdown, category filters, and order cart
 - [x] **Product grid removal**: Completely removed products grid from POS; interface now consists of header, customer selector, search dropdown, category filters, and order cart that fills remaining viewport
 - [x] **Cart table format**: Reordered cart item display into single-row table layout with columns: Item Name (col-span-4), Unit selector (col-span-2), Unit Price (col-span-2, right-aligned), Quantity controls (col-span-2, centered), Line Total Amount (col-span-1, right-aligned), and Delete button (col-span-1)
 - [x] **Sale product highlighting**: Products on Happy Hour (Shot category) display with amber border/background, bold font, increased font size (+2pt), and "✨ Happy Hour" badge
