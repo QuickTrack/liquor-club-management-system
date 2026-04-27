@@ -17,15 +17,18 @@ export async function GET(request: Request) {
     
     const status = searchParams.get("status");
     const customerId = searchParams.get("customerId");
+    const assignedTo = searchParams.get("assignedTo");
     const limit = parseInt(searchParams.get("limit") || "50");
     const offset = parseInt(searchParams.get("offset") || "0");
 
     const filter: Record<string, any> = {};
     if (status) filter.status = status;
     if (customerId) filter.customer = customerId;
+    if (assignedTo) filter.assignedTo = assignedTo;
 
     const orders = await Order.find(filter)
       .populate("customer", "name phone")
+      .populate("assignedTo", "name role")
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(offset);
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
       total,
       paymentMethod,
       pointsEarned = 0,
+      assignedTo,
     } = data;
 
     if (!customer || !items || !Array.isArray(items) || items.length === 0) {
@@ -90,6 +94,7 @@ export async function POST(request: Request) {
             paymentMethod: paymentMethod || "cash",
             status: "paid",
             pointsEarned,
+            assignedTo: assignedTo ? new mongoose.Types.ObjectId(assignedTo) : undefined,
             paidAt: new Date(),
           },
         ],
@@ -138,8 +143,11 @@ export async function POST(request: Request) {
       await session.commitTransaction();
       session.endSession();
 
-      // Populate customer info for response
+      // Populate customer and assignedTo info for response
       await createdOrder.populate("customer", "name phone email");
+      if (createdOrder.assignedTo) {
+        await createdOrder.populate("assignedTo", "name role");
+      }
 
       return NextResponse.json(createdOrder, { status: 201 });
     } catch (error) {
@@ -156,5 +164,51 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error creating order:", error);
     return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/orders/[id]
+ * Update an existing order (for handover and status changes)
+ */
+export async function PATCH(request: Request) {
+  try {
+    await connectDB();
+    const { id } = await request.json();
+    const updates = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Build update object
+    const updateFields: any = {};
+    if (updates.status) updateFields.status = updates.status;
+    if (updates.assignedTo) {
+      updateFields.assignedTo = new mongoose.Types.ObjectId(updates.assignedTo);
+    }
+    if (updates.paymentMethod) updateFields.paymentMethod = updates.paymentMethod;
+    if (updates.paidAt !== undefined) updateFields.paidAt = updates.paidAt;
+
+    // If status changed to paid and paidAt not set, set it
+    if (updates.status === "paid" && !updateFields.paidAt) {
+      updateFields.paidAt = new Date();
+    }
+
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true }
+    ).populate("customer", "name phone email").populate("assignedTo", "name role");
+
+    return NextResponse.json(updatedOrder);
+  } catch (error: any) {
+    console.error("Error updating order:", error);
+    return NextResponse.json({ error: error.message || "Failed to update order" }, { status: 500 });
   }
 }

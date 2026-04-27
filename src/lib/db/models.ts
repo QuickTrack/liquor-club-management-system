@@ -223,6 +223,7 @@ export interface IOrder extends Document {
   paymentMethod: "cash" | "mpesa" | "card";
   status: "draft" | "held" | "billed" | "paid" | "cancelled";
   pointsEarned: number;
+  assignedTo?: mongoose.Types.ObjectId; // Staff member assigned to this order
   createdAt: Date;
   heldAt?: Date;
   paidAt?: Date;
@@ -249,6 +250,7 @@ const OrderSchema = new Schema<IOrder>({
   paymentMethod: { type: String, enum: ["cash", "mpesa", "card"], default: "cash" },
   status: { type: String, enum: ["draft", "held", "billed", "paid", "cancelled"], default: "draft" },
   pointsEarned: { type: Number, default: 0 },
+  assignedTo: { type: Schema.Types.ObjectId, ref: "Staff" },
   heldAt: Date,
   paidAt: Date,
 }, { timestamps: true });
@@ -256,6 +258,7 @@ const OrderSchema = new Schema<IOrder>({
 OrderSchema.index({ orderId: 1 }, { unique: true });
 OrderSchema.index({ customer: 1 });
 OrderSchema.index({ status: 1 });
+OrderSchema.index({ assignedTo: 1 });
 OrderSchema.index({ createdAt: -1 });
 
 // ============================================
