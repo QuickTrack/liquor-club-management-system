@@ -43,6 +43,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Inventory data loading**: Inventory page now loads products from database on mount, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations
 - [x] **Alternate unit pricing**: Fixed data persistence for alternate unit sellPrice and costPrice; added fields to Unit schema; updated API to store and return these values; POS now uses stored unit prices for cart calculations, falling back to computed when not set
 - [x] **POS cart refactor**: Removed algorithmic price derivation; all unit selections now use predefined fixed sellPrice from product configuration; unit price computation simplified to direct lookup
+- [x] **Alternate unit editing**: Added inline edit functionality for alternate units in AddProductModal; users can now modify unit name, conversion factor, sell price, and cost price after creation; includes validation and duplicate name checking
 
 ## Current Structure
 

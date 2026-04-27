@@ -81,6 +81,18 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [activeSection, setActiveSection] = useState(0);
+  const [editingUnitIndex, setEditingUnitIndex] = useState<number | null>(null);
+  const [editUnitForm, setEditUnitForm] = useState<{
+    unit: string;
+    conversionFactor: string;
+    sellPrice: string;
+    costPrice: string;
+  }>({
+    unit: "",
+    conversionFactor: "",
+    sellPrice: "",
+    costPrice: "",
+  });
 
   // Set initial form values when product is provided (edit mode)
   useEffect(() => {
@@ -192,6 +204,45 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
       newUnitCostPrice: "",
     });
     setErrors({ ...errors, newUnitName: "" });
+  };
+
+  const startEditUnit = (index: number) => {
+    const unit = form.alternateUnits[index];
+    setEditUnitForm({
+      unit: unit.unit,
+      conversionFactor: unit.conversionFactor.toString(),
+      sellPrice: unit.sellPrice.toString(),
+      costPrice: unit.costPrice?.toString() || "",
+    });
+    setEditingUnitIndex(index);
+  };
+
+  const saveEditUnit = () => {
+    if (!editUnitForm.unit.trim() || !editUnitForm.conversionFactor || parseFloat(editUnitForm.conversionFactor) <= 0) {
+      setErrors({ ...errors, editUnit: "Invalid unit data" });
+      return;
+    }
+    const updatedUnits = [...form.alternateUnits];
+    updatedUnits[editingUnitIndex!] = {
+      unit: editUnitForm.unit.trim(),
+      conversionFactor: parseFloat(editUnitForm.conversionFactor),
+      sellPrice: parseFloat(editUnitForm.sellPrice) || 0,
+      costPrice: editUnitForm.costPrice ? parseFloat(editUnitForm.costPrice) : undefined,
+    };
+    // Check for duplicate unit names (excluding current)
+    const duplicates = updatedUnits.filter((u, i) => i !== editingUnitIndex && u.unit.toLowerCase() === editUnitForm.unit.toLowerCase());
+    if (duplicates.length > 0) {
+      setErrors({ ...errors, editUnit: "Unit name already exists" });
+      return;
+    }
+    setForm({ ...form, alternateUnits: updatedUnits });
+    setEditingUnitIndex(null);
+    setEditUnitForm({ unit: "", conversionFactor: "", sellPrice: "", costPrice: "" });
+  };
+
+  const cancelEditUnit = () => {
+    setEditingUnitIndex(null);
+    setEditUnitForm({ unit: "", conversionFactor: "", sellPrice: "", costPrice: "" });
   };
 
   const removeAlternateUnit = (index: number) => {
@@ -350,40 +401,117 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
             )}
           </div>
         );
-      case "alternateUnits":
-        return (
-          <div key={field}>
-            <label className="text-sm font-medium text-gray-300 mb-2 block">Alternate Units</label>
-            <p className="text-xs text-gray-400 mb-4">Define alternate units (e.g. case, pack) with conversion ratios</p>
-            {form.alternateUnits.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {form.alternateUnits.map((unit, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-neutral-700/50 border border-neutral-600 rounded-lg">
-                    <div>
-                      <span className="font-medium text-white">{unit.unit}</span>
-                      <span className="text-sm text-gray-400 ml-2">
-                        1 {unit.unit} = {unit.conversionFactor} {form.baseUnit}s
-                      </span>
-                      <span className="text-sm text-gray-400 ml-2">
-                        Sell: KES {unit.sellPrice}
-                      </span>
-                      {unit.costPrice && (
-                        <span className="text-sm text-gray-400 ml-2">
-                          Cost: KES {unit.costPrice}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAlternateUnit(index)}
-                      className="p-2 text-red-400 hover:text-red-300 hover:bg-neutral-600 rounded disabled:opacity-50"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+       case "alternateUnits":
+         return (
+           <div key={field}>
+             <label className="text-sm font-medium text-gray-300 mb-2 block">Alternate Units</label>
+             <p className="text-xs text-gray-400 mb-4">Define alternate units (e.g. case, pack) with conversion ratios and pricing</p>
+             {form.alternateUnits.length > 0 && (
+               <div className="space-y-2 mb-4">
+                 {form.alternateUnits.map((unit, index) => (
+                   editingUnitIndex === index ? (
+                     // Edit Mode
+                     <div key={index} className="p-4 bg-neutral-700/70 border border-blue-500 rounded-lg space-y-3">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                         <div>
+                           <label className="text-xs text-gray-400 mb-1 block">Unit Name</label>
+                           <input
+                             type="text"
+                             value={editUnitForm.unit}
+                             onChange={(e) => setEditUnitForm({ ...editUnitForm, unit: e.target.value })}
+                             className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs text-gray-400 mb-1 block">Conversion Factor (1 unit = X {form.baseUnit}s)</label>
+                           <input
+                             type="number"
+                             step="0.01"
+                             min="0.01"
+                             value={editUnitForm.conversionFactor}
+                             onChange={(e) => setEditUnitForm({ ...editUnitForm, conversionFactor: e.target.value })}
+                             className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs text-gray-400 mb-1 block">Sell Price (KES)</label>
+                           <input
+                             type="number"
+                             step="0.01"
+                             min="0"
+                             value={editUnitForm.sellPrice}
+                             onChange={(e) => setEditUnitForm({ ...editUnitForm, sellPrice: e.target.value })}
+                             className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
+                           />
+                         </div>
+                         <div>
+                           <label className="text-xs text-gray-400 mb-1 block">Cost Price (KES, optional)</label>
+                           <input
+                             type="number"
+                             step="0.01"
+                             min="0"
+                             value={editUnitForm.costPrice}
+                             onChange={(e) => setEditUnitForm({ ...editUnitForm, costPrice: e.target.value })}
+                             className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
+                           />
+                         </div>
+                       </div>
+                       {errors.editUnit && <p className="mt-1 text-xs text-red-400">{errors.editUnit}</p>}
+                       <div className="flex gap-2">
+                         <button
+                           type="button"
+                           onClick={saveEditUnit}
+                           className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg font-medium transition-colors"
+                         >
+                           Save
+                         </button>
+                         <button
+                           type="button"
+                           onClick={cancelEditUnit}
+                           className="px-3 py-1.5 bg-neutral-600 hover:bg-neutral-700 text-white text-sm rounded-lg font-medium transition-colors"
+                         >
+                           Cancel
+                         </button>
+                       </div>
+                     </div>
+                   ) : (
+                     // View Mode
+                     <div key={index} className="flex items-center justify-between p-3 bg-neutral-700/50 border border-neutral-600 rounded-lg">
+                       <div>
+                         <span className="font-medium text-white">{unit.unit}</span>
+                         <span className="text-sm text-gray-400 ml-2">
+                           1 {unit.unit} = {unit.conversionFactor} {form.baseUnit}s
+                         </span>
+                         <span className="text-sm text-gray-400 ml-2">
+                           Sell: KES {unit.sellPrice}
+                         </span>
+                         {unit.costPrice && (
+                           <span className="text-sm text-gray-400 ml-2">
+                             Cost: KES {unit.costPrice}
+                           </span>
+                         )}
+                       </div>
+                       <div className="flex items-center gap-2">
+                         <button
+                           type="button"
+                           onClick={() => startEditUnit(index)}
+                           className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-neutral-600 rounded text-sm font-medium transition-colors"
+                         >
+                           Edit
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => removeAlternateUnit(index)}
+                           className="p-2 text-red-400 hover:text-red-300 hover:bg-neutral-600 rounded disabled:opacity-50"
+                         >
+                           ×
+                         </button>
+                       </div>
+                     </div>
+                   )
+                 ))}
+               </div>
+             )}
             <div className="p-4 bg-neutral-700/30 border border-neutral-600/50 rounded-lg">
               <h4 className="text-sm font-medium text-gray-300 mb-3">Add Alternate Unit</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
