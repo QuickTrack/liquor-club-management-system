@@ -22,25 +22,43 @@ export async function GET() {
     const productsWithUOM = products.map(product => {
       const productUOM = uomMap.get(product._id.toString());
       const productObj = product.toObject();
+
+      // Helper to ensure unit has sellPrice/costPrice; compute from base product if missing
+      const ensureUnitPrices = (units: any[]) => {
+        return units.map(u => {
+          // Convert Mongoose subdocument to plain object
+          const unit = u.toObject ? u.toObject() : { ...u };
+          // Backfill missing sellPrice using base product price and conversion factor
+          if (unit.sellPrice === undefined || unit.sellPrice === null) {
+            unit.sellPrice = product.sellPrice * unit.conversionFactor;
+          }
+          // Backfill missing costPrice similarly (optional)
+          if (unit.costPrice === undefined || unit.costPrice === null) {
+            unit.costPrice = product.costPrice ? product.costPrice * unit.conversionFactor : undefined;
+          }
+          return unit;
+        });
+      };
+
       return {
         ...productObj,
         id: product._id.toString(), // Ensure id field is present as string
         price: product.sellPrice, // Alias sellPrice as price for frontend
         uom: productUOM ? {
           baseUnit: productUOM.baseUnit,
-          units: productUOM.units
-         } : {
-           baseUnit: product.unit,
-           units: [{
-             name: product.unit,
-             abbreviation: product.unit,
-             isBase: true,
-             conversionFactor: 1,
-             isActive: true,
-             sellPrice: product.sellPrice,
-             costPrice: product.costPrice,
-           }]
-         }
+          units: ensureUnitPrices(productUOM.units)
+        } : {
+          baseUnit: product.unit,
+          units: [{
+            name: product.unit,
+            abbreviation: product.unit,
+            isBase: true,
+            conversionFactor: 1,
+            isActive: true,
+            sellPrice: product.sellPrice,
+            costPrice: product.costPrice,
+          }]
+        }
       };
     });
 
