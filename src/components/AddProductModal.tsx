@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Package, DollarSign, Building2, RefreshCw, Plus, Scale } from "lucide-react";
 
 interface UnitConversion {
@@ -11,6 +11,7 @@ interface UnitConversion {
 }
 
 interface Product {
+  _id?: string;
   id: number;
   name: string;
   category: string;
@@ -26,13 +27,26 @@ interface Product {
   status: "In Stock" | "Low Stock" | "Out of Stock";
 }
 
+interface Category {
+  _id: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon?: string;
+  sortOrder: number;
+  isActive: boolean;
+  parentId?: string;
+}
+
 interface AddProductModalProps {
   onClose: () => void;
   onSave: (p: Omit<Product, "id" | "status">) => void;
-  categories: string[];
+  product?: Product;
 }
 
-export function AddProductModal({ onClose, onSave, categories }: AddProductModalProps) {
+export function AddProductModal({ onClose, onSave, product }: AddProductModalProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const [form, setForm] = useState<{
     name: string;
     category: string;
@@ -50,7 +64,7 @@ export function AddProductModal({ onClose, onSave, categories }: AddProductModal
     newUnitCostPrice: string;
   }>({
     name: "",
-    category: categories[0] || "Bourbon",
+    category: "",
     baseUnit: "bottle",
     stockQuantity: 0,
     reorderLevel: 10,
@@ -63,10 +77,60 @@ export function AddProductModal({ onClose, onSave, categories }: AddProductModal
     newUnitFactor: "",
     newUnitSellPrice: "",
     newUnitCostPrice: "",
-  });
+   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [activeSection, setActiveSection] = useState(0);
+
+  // Set initial form values when product is provided (edit mode)
+  useEffect(() => {
+    if (product) {
+      setForm({
+        name: product.name,
+        category: product.category,
+        baseUnit: product.baseUnit,
+        stockQuantity: product.stockQuantity,
+        reorderLevel: product.reorderLevel,
+        costPrice: product.costPrice,
+        sellPrice: product.sellPrice,
+        supplier: product.supplier,
+        alternateUnits: product.alternateUnits || [],
+        newCategory: "",
+        newUnitName: "",
+        newUnitFactor: "",
+        newUnitSellPrice: "",
+        newUnitCostPrice: "",
+      });
+    }
+  }, [product]);
+
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch("/api/categories");
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  // Set default category when categories load (only for add mode)
+  useEffect(() => {
+    if (categories.length > 0 && !product) {
+      setForm((prev) => ({
+        ...prev,
+        category: prev.category || categories[0].name,
+      }));
+    }
+  }, [categories, product]);
 
   const sections = [
     { id: 0, title: "Basic Info", fields: ["name", "category"] },
@@ -156,41 +220,57 @@ export function AddProductModal({ onClose, onSave, categories }: AddProductModal
             {hasError && <p className="mt-1 text-xs text-red-400">{hasError}</p>}
           </div>
         );
-      case "category":
-        return (
-          <div key={field}>
-            <label className="text-sm font-medium text-gray-300 mb-2 block">Category</label>
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
-            >
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                placeholder="New category"
-                value={form.newCategory}
-                onChange={(e) => setForm({ ...form, newCategory: e.target.value })}
-                className="flex-1 bg-neutral-700 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!form.newCategory.trim()) return;
-                  categories.push(form.newCategory.trim());
-                  setForm({ ...form, category: form.newCategory.trim(), newCategory: "" });
-                }}
-                className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        );
+       case "category":
+         return (
+           <div key={field}>
+             <label className="text-sm font-medium text-gray-300 mb-2 block">Category</label>
+             <select
+               value={form.category}
+               onChange={(e) => setForm({ ...form, category: e.target.value })}
+               className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+               disabled={loadingCategories}
+             >
+               {categories.map((c) => (
+                 <option key={c._id} value={c.name}>{c.name}</option>
+               ))}
+             </select>
+             {loadingCategories && (
+               <p className="mt-1 text-xs text-gray-400">Loading categories...</p>
+             )}
+             <div className="mt-2 flex gap-2">
+               <input
+                 type="text"
+                 placeholder="New category"
+                 value={form.newCategory}
+                 onChange={(e) => setForm({ ...form, newCategory: e.target.value })}
+                 className="flex-1 bg-neutral-700 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500"
+               />
+               <button
+                 type="button"
+                 onClick={async () => {
+                   if (!form.newCategory.trim()) return;
+                   try {
+                     const res = await fetch("/api/categories", {
+                       method: "POST",
+                       headers: { "Content-Type": "application/json" },
+                       body: JSON.stringify({ name: form.newCategory.trim() }),
+                     });
+                     if (res.ok) {
+                       const newCat = await res.json();
+                       setCategories([...categories, newCat]);
+                       setForm({ ...form, category: form.newCategory.trim(), newCategory: "" });
+                     }
+                   } catch (error) {
+                     console.error("Failed to add category:", error);
+                   }
+                 }}
+                 className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+               >
+                 Add
+               </button>
+             </div>
+           </div>
+         );
       case "baseUnit":
         return (
           <div key={field}>

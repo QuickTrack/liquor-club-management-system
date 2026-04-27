@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ShoppingBasket,
   ShoppingCart,
@@ -21,11 +21,14 @@ import {
 } from "lucide-react";
 
 interface CartItem {
-  id: number;
+  id: string;
   name: string;
-  price: number;
+  basePrice: number; // Price per base unit
   quantity: number;
   category: string;
+  unit: string;
+  conversionFactor: number; // Conversion factor for selected unit relative to base unit
+  unitPrice: number; // Computed: basePrice * conversionFactor (used for display)
 }
 
 interface Order {
@@ -51,6 +54,24 @@ interface Customer {
   points: number;
 }
 
+interface ProductWithUOM {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  stock: number;
+  uom: {
+    baseUnit: string;
+    units: {
+      name: string;
+      abbreviation: string;
+      isBase: boolean;
+      conversionFactor: number;
+      isActive: boolean;
+    }[];
+  };
+}
+
 const tierDiscounts: Record<Customer["tier"], number> = {
   Bronze: 0,
   Silver: 0,
@@ -66,25 +87,6 @@ const initialCustomers: Customer[] = [
   { id: 5, name: "Sarah Williams", phone: "+254 745 678 901", tier: "Bronze", creditLimit: 2000, creditUsed: 0, points: 280 },
   { id: 6, name: "Tom Brown", phone: "+254 756 789 012", tier: "Gold", creditLimit: 15000, creditUsed: 3000, points: 6500 },
   { id: 7, name: "Emily Davis", phone: "+254 767 890 123", tier: "VIP", creditLimit: 30000, creditUsed: 8000, points: 10500 },
-];
-
-const products = [
-  { id: 1, name: "Jack Daniel's", price: 300, category: "Bourbon", stock: 24 },
-  { id: 2, name: "Grey Goose", price: 450, category: "Vodka", stock: 18 },
-  { id: 3, name: "Johnnie Walker", price: 500, category: "Scotch", stock: 12 },
-  { id: 4, name: "Moet & Chandon", price: 1200, category: "Champagne", stock: 6 },
-  { id: 5, name: "Hennessy VS", price: 400, category: "Cognac", stock: 15 },
-  { id: 6, name: "Patron Silver", price: 450, category: "Tequila", stock: 20 },
-  { id: 7, name: "Heineken (Draft)", price: 150, category: "Beer", stock: 50 },
-  { id: 8, name: "Guinness", price: 200, category: "Beer", stock: 30 },
-  { id: 9, name: "Jameson", price: 350, category: "Irish", stock: 16 },
-  { id: 10, name: "Vodka Pump", price: 100, category: "Shot", stock: 100 },
-  { id: 11, name: "Tequila Shot", price: 150, category: "Shot", stock: 80 },
-  { id: 12, name: "Rum Shot", price: 150, category: "Shot", stock: 75 },
-  { id: 13, name: "Wine (Glass)", price: 250, category: "Wine", stock: 24 },
-  { id: 14, name: "Soda", price: 50, category: "Mixer", stock: 100 },
-  { id: 15, name: "Energy Drink", price: 150, category: "Mixer", stock: 40 },
-  { id: 16, name: "Tonic Water", price: 80, category: "Mixer", stock: 36 },
 ];
 
 const categories = ["All", "Bourbon", "Vodka", "Scotch", "Champagne", "Cognac", "Tequila", "Beer", "Shot", "Wine", "Mixer"];
@@ -126,20 +128,27 @@ export default function POSPage() {
   const [mounted, setMounted] = useState(false);
   const [heldOrders, setHeldOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [products, setProducts] = useState<ProductWithUOM[]>([]);
   const [activeCategory, setActiveCategory] = useState("All");
   const [isHappyHour, setIsHappyHour] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+   const [searchTerm, setSearchTerm] = useState("");
+   const [isSearchOpen, setIsSearchOpen] = useState(false);
+   const searchInputRef = useRef<HTMLInputElement>(null);
+   const searchDropdownRef = useRef<HTMLDivElement>(null);
+   const incrementButtonRef = useRef<HTMLButtonElement>(null);
+   const focusedItemId = useRef<string | null>(null);
   
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "account">("cash");
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [showCustomerSelect, setShowCustomerSelect] = useState(false);
-  const [showHeldOrders, setShowHeldOrders] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [billedOrder, setBilledOrder] = useState<Order | null>(null);
-  const [changeAmount, setChangeAmount] = useState("");
-  const [showChangeInput, setShowChangeInput] = useState(false);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
+   const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "account">("cash");
+   const [showReceipt, setShowReceipt] = useState(false);
+   const [showCustomerSelect, setShowCustomerSelect] = useState(false);
+   const [showHeldOrders, setShowHeldOrders] = useState(false);
+   const [customerSearch, setCustomerSearch] = useState("");
+   const [billedOrder, setBilledOrder] = useState<Order | null>(null);
+   const [changeAmount, setChangeAmount] = useState("");
+   const [showChangeInput, setShowChangeInput] = useState(false);
+   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
@@ -148,25 +157,67 @@ export default function POSPage() {
   });
   const [customerError, setCustomerError] = useState<string>("");
 
-  useEffect(() => {
-    const initializeData = async () => {
-      try {
-        const response = await fetch("/api/customers");
-        if (response.ok) {
-          const data = await response.json();
-          setCustomers(data);
-        } else {
-          console.error("Failed to fetch customers, using initial data");
-        }
-      } catch (error) {
-        console.error("Error fetching customers:", error);
-      } finally {
-        setLoadingCustomers(false);
-      }
-    };
+   useEffect(() => {
+     const initializeData = async () => {
+       try {
+         const [customersRes, productsRes] = await Promise.all([
+           fetch("/api/customers"),
+           fetch("/api/products"),
+         ]);
+         
+         if (customersRes.ok) {
+           const customersData = await customersRes.json();
+           setCustomers(customersData);
+         } else {
+           console.error("Failed to fetch customers, using initial data");
+         }
+         
+         if (productsRes.ok) {
+           const productsData = await productsRes.json();
+           setProducts(productsData);
+         } else {
+           console.error("Failed to fetch products, using initial data");
+         }
+       } catch (error) {
+         console.error("Error fetching data:", error);
+       } finally {
+         setLoadingCustomers(false);
+         setLoadingProducts(false);
+       }
+     };
 
-    initializeData();
-  }, []);
+     initializeData();
+   }, []);
+
+   // Handle click outside to close search dropdown
+   useEffect(() => {
+     const handleClickOutside = (event: MouseEvent) => {
+       if (
+         searchDropdownRef.current && 
+         !searchDropdownRef.current.contains(event.target as Node) &&
+         searchInputRef.current &&
+         !searchInputRef.current.contains(event.target as Node)
+       ) {
+         setIsSearchOpen(false);
+       }
+     };
+
+     if (isSearchOpen) {
+       document.addEventListener('mousedown', handleClickOutside);
+     }
+
+     return () => {
+       document.removeEventListener('mousedown', handleClickOutside);
+     };
+   }, [isSearchOpen]);
+
+   // Focus the increment button of newly added item
+   useEffect(() => {
+     if (focusedItemId.current && incrementButtonRef.current) {
+       incrementButtonRef.current.focus();
+       focusedItemId.current = null;
+     }
+   }, [currentOrder.items]);
 
   useEffect(() => {
     if (!loadingCustomers && !mounted && customers.length > 0) {
@@ -186,21 +237,69 @@ export default function POSPage() {
     }
   }, [loadingCustomers, mounted, customers]);
 
-  const filteredProducts = products.filter((p) => {
-    const matchesCategory = activeCategory === "All" || p.category === activeCategory;
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  const updatePricesWithCustomer = (customer: Customer) => {
-    const newItems = currentOrder.items.map((item) => {
-      const basePrice = products.find((p) => p.id === item.id)?.price || item.price;
-      return { ...item, price: basePrice };
+  const filteredProducts = useMemo(() => {
+    // If no products loaded yet, return empty array
+    if (!products || products.length === 0) {
+      return [];
+    }
+    
+    // Filter by category
+    const categoryFiltered = activeCategory === "All" 
+      ? products 
+      : products.filter(p => p.category === activeCategory);
+    
+    // If no search term, return category-filtered results
+    if (!searchTerm || searchTerm.trim() === "") {
+      console.log("No search term, returning", categoryFiltered.length, "products out of", products.length, "total");
+      return categoryFiltered;
+    }
+    
+    // Filter by search term
+    const searchLower = searchTerm.toLowerCase().trim();
+    const result = categoryFiltered.filter((p) => {
+      const productName = p.name ? p.name.toLowerCase() : "";
+      return productName.includes(searchLower);
     });
-    const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.16;
-    setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal, tierDiscount: 0, tax, total: subtotal + tax });
-  };
+    
+    console.log(`Search "${searchTerm}": found`, result.length, "products out of", products.length, "total");
+    return result;
+  }, [products, searchTerm, activeCategory]);
+
+   const updatePricesWithCustomer = (customer: Customer) => {
+     const newItems = currentOrder.items.map((item) => {
+       const product = products.find((p) => p.id === item.id);
+       if (!product) return item;
+       
+       // Find the currently selected unit (fallback to base unit)
+       const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit) 
+         || product.uom.units.find(u => u.isBase) 
+         || product.uom.units[0];
+       
+       // Compute unitPrice from product's base price (sellPrice - VAT inclusive)
+       const conversionFactor = selectedUnit.conversionFactor;
+       const unitPrice = product.price * conversionFactor;
+       
+       // Apply happy hour if applicable
+       let finalUnitPrice = unitPrice;
+       if (isHappyHour && product.category === "Shot") {
+         finalUnitPrice = unitPrice * 0.8;
+       }
+       
+       return { 
+         ...item, 
+         basePrice: product.price,
+         unitPrice: finalUnitPrice,
+         conversionFactor,
+         unit: selectedUnit.abbreviation,
+       };
+     });
+     
+     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+     const netSubtotal = grossSubtotal / 1.16;
+     const tax = grossSubtotal - netSubtotal;
+     
+     setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
+   };
 
   const handleAddCustomer = async () => {
     if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
@@ -241,34 +340,101 @@ export default function POSPage() {
     }
   };
 
-  const addToOrder = (product: typeof products[0]) => {
-    let price = product.price;
-    if (isHappyHour && product.category === "Shot") price = price * 0.8;
+   const addToOrder = (product: ProductWithUOM) => {
+     // Get the base unit (isBase: true) as default
+     const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
+     const conversionFactor = baseUnit.conversionFactor;
+     const unitPrice = product.price * conversionFactor; // price displayed per selected unit (VAT inclusive)
+     
+     let finalUnitPrice = unitPrice;
+     if (isHappyHour && product.category === "Shot") finalUnitPrice = finalUnitPrice * 0.8;
 
-    const newItems = [...currentOrder.items];
-    const existing = newItems.find((item) => item.id === product.id);
-    if (existing) existing.quantity += 1;
-    else newItems.push({ ...product, price, quantity: 1 });
+     const newItems = [...currentOrder.items];
+     const existing = newItems.find((item) => item.id === product.id);
+     let isNewItem = false;
+     
+     if (existing) existing.quantity += 1;
+     else {
+       newItems.push({ 
+         id: product.id,
+         name: product.name,
+         basePrice: product.price,
+         quantity: 1,
+         category: product.category,
+         unit: baseUnit.abbreviation,
+         conversionFactor,
+         unitPrice: finalUnitPrice,
+       });
+       isNewItem = true;
+     }
 
-    const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.16;
+     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+     const netSubtotal = grossSubtotal / 1.16;
+     const tax = grossSubtotal - netSubtotal;
 
-    setCurrentOrder({ ...currentOrder, items: newItems, subtotal, tierDiscount: 0, tax, total: subtotal + tax });
-  };
+     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
+     
+     // Clear search and close dropdown for any selection
+     setSearchTerm("");
+     setIsSearchOpen(false);
+     
+     // Focus quantity controls only for newly added items
+     if (isNewItem) {
+       focusedItemId.current = product.id;
+     }
+   };
 
-  const updateQuantity = (id: number, delta: number) => {
-    const newItems = currentOrder.items.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0);
-    const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.16;
-    setCurrentOrder({ ...currentOrder, items: newItems, subtotal, tax, total: subtotal + tax });
-  };
+   const updateQuantity = (id: string, delta: number) => {
+     const newItems = currentOrder.items.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0);
+     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+     const netSubtotal = grossSubtotal / 1.16;
+     const tax = grossSubtotal - netSubtotal;
+     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+   };
 
-  const removeItem = (id: number) => {
-    const newItems = currentOrder.items.filter((item) => item.id !== id);
-    const subtotal = newItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.16;
-    setCurrentOrder({ ...currentOrder, items: newItems, subtotal, tax, total: subtotal + tax });
-  };
+   const changeUnit = (id: string, unitAbbreviation: string) => {
+     const newItems = currentOrder.items.map((item) => {
+       if (item.id !== id) return item;
+       
+       // Find the product to get base price and available units
+       const product = products.find(p => p.id === item.id);
+       if (!product) return item;
+       
+       // Find the selected unit
+       const selectedUnit = product.uom.units.find(u => u.abbreviation === unitAbbreviation);
+       if (!selectedUnit) return item;
+       
+       // Compute new unitPrice directly from basePrice to avoid rounding errors
+       const newConversionFactor = selectedUnit.conversionFactor;
+       const newUnitPrice = product.price * newConversionFactor;
+       
+       // Apply happy hour discount if applicable (shots only)
+       let finalUnitPrice = newUnitPrice;
+       if (isHappyHour && product.category === "Shot") {
+         finalUnitPrice = finalUnitPrice * 0.8;
+       }
+       
+       return {
+         ...item,
+         unit: unitAbbreviation,
+         conversionFactor: newConversionFactor,
+         unitPrice: finalUnitPrice,
+       };
+     });
+     
+     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+     const netSubtotal = grossSubtotal / 1.16;
+     const tax = grossSubtotal - netSubtotal;
+     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+   };
+
+   const removeItem = (id: string) => {
+     const newItems = currentOrder.items.filter((item) => item.id !== id);
+     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+     const netSubtotal = grossSubtotal / 1.16;
+     const tax = grossSubtotal - netSubtotal;
+     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+   };
 
   const clearOrder = () => {
     setCurrentOrder({ id: getOrderId(currentOrder.customer.name), customer: currentOrder.customer, items: [], subtotal: 0, tierDiscount: 0, tax: 0, total: 0, status: "draft", createdAt: new Date().toISOString() });
@@ -317,223 +483,311 @@ const completeSale = () => {
   const getChange = () => parseFloat(changeAmount) - (billedOrder?.total || 0);
 
   return (
-    <div className="h-[calc(100vh-3rem)] flex gap-4">
-      {/* Left Panel - Products */}
-      <div className="flex-1 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">New Order</h1>
-            <p className="text-gray-400 text-sm">Order {mounted ? currentOrder.id : '...'} for {currentOrder.customer.name}</p>
+    <div className="h-[calc(100vh-3rem)] flex flex-col gap-1">
+      {/* Top Section - Products - Ultra Compact Layout */}
+      <div className="flex-1 flex flex-col gap-1 min-h-0">
+        {/* Header Row - All in one horizontal line */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm font-bold text-white truncate">New Order</h1>
+            <span className="text-xs text-gray-400 truncate hidden sm:inline">{mounted ? currentOrder.id : '...'}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-2 px-3 py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600">
-              <Pause className="w-4 h-4" /> Held ({heldOrders.length})
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-1 px-1.5 py-1 bg-neutral-700 text-white text-xs rounded hover:bg-neutral-600">
+              <Pause className="w-3 h-3" /> <span className="hidden sm:inline">{heldOrders.length}</span>
             </button>
-            <button onClick={() => setIsHappyHour(!isHappyHour)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium ${isHappyHour ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
-              <Flame className="w-4 h-4" /> Happy Hour
+            <button onClick={() => setIsHappyHour(!isHappyHour)} className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs font-medium ${isHappyHour ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
+              <Flame className="w-3 h-3" /> <span className="hidden sm:inline">HH</span>
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowCustomerSelect(true)} className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors ${currentOrder.customer.tier === "VIP" ? "bg-purple-500 text-white" : currentOrder.customer.tier === "Gold" ? "bg-blue-500 text-white" : currentOrder.customer.tier === "Silver" ? "bg-gray-400 text-black" : "bg-blue-700 text-white"}`}>
-            <Users className="w-4 h-4" /> {currentOrder.customer.name}
+        {/* Controls Row - Single horizontal line with all controls */}
+        <div className="flex items-center gap-1">
+          <button onClick={() => setShowCustomerSelect(true)} className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium shrink-0 ${currentOrder.customer.tier === "VIP" ? "bg-purple-500 text-white" : currentOrder.customer.tier === "Gold" ? "bg-blue-500 text-white" : currentOrder.customer.tier === "Silver" ? "bg-gray-400 text-black" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
+            <Users className="w-3 h-3" /> <span className="truncate max-w-[80px]">{currentOrder.customer.name}</span>
           </button>
-          
-        </div>
 
-        <input type="text" placeholder="Search drinks..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-neutral-800 border border-neutral-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500" />
+          {/* Search with floating dropdown overlay */}
+          <div className="relative flex-1 min-w-0">
+            <input 
+              ref={searchInputRef}
+              type="text" 
+              placeholder="Search..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsSearchOpen(true)}
+              className="w-full bg-neutral-800 border border-neutral-700 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500"
+            />
 
-        <div className="flex gap-2 flex-wrap">
-          {categories.map((cat) => (<button key={cat} onClick={() => setActiveCategory(cat)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${activeCategory === cat ? "bg-blue-500 text-white" : "bg-neutral-800 text-gray-300 hover:bg-neutral-700"}`}>{cat}</button>))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-4 gap-2">
-            {filteredProducts.map((product) => (<button key={product.id} onClick={() => addToOrder(product)} className="bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 hover:border-amber-500 p-3 rounded-lg text-left transition-colors"><p className="text-white font-medium text-sm truncate">{product.name}</p><p className="text-amber-500 font-bold">Ksh {product.price}</p><p className="text-gray-500 text-xs">Stock: {product.stock}</p></button>))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right Panel - Current Order */}
-      <div className="w-96 bg-neutral-800 rounded-xl border border-neutral-700 flex flex-col">
-        <div className="p-4 border-b border-neutral-700 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Current Order</h2>
-          <span className="text-gray-400 text-sm">{currentOrder.items.length} items</span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {currentOrder.items.length === 0 ? (
-            <div className="text-center text-gray-500 py-8"><ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>No items yet</p><p className="text-sm">Click products to add</p></div>
-          ) : (
-            currentOrder.items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between bg-neutral-700/50 p-2 rounded-lg">
-                <div className="flex-1"><p className="text-white text-sm font-medium">{item.name}</p><p className="text-gray-400 text-xs">Ksh {item.price} each</p></div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 flex items-center justify-center bg-neutral-600 rounded text-white"><Minus className="w-4 h-4" /></button>
-                  <span className="text-white w-6 text-center">{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 flex items-center justify-center bg-neutral-600 rounded text-white"><Plus className="w-4 h-4" /></button>
-                  <button onClick={() => removeItem(item.id)} className="w-7 h-7 flex items-center justify-center bg-red-500/20 rounded text-red-500"><X className="w-4 h-4" /></button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="p-4 border-t border-neutral-700 space-y-2">
-          <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>Ksh {currentOrder.subtotal.toFixed(2)}</span></div>
-          
-          <div className="flex justify-between text-gray-400"><span>Tax (VAT 16%)</span><span>Ksh {currentOrder.tax.toFixed(2)}</span></div>
-          <div className="flex justify-between text-white text-xl font-bold pt-2 border-t border-neutral-700"><span>Total</span><span>Ksh {currentOrder.total.toFixed(2)}</span></div>
-        </div>
-
-        <div className="p-4 border-t border-neutral-700 space-y-2">
-          <div className="flex gap-2">
-            <button onClick={holdOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-2 py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 disabled:opacity-50"><Pause className="w-4 h-4" /> Hold</button>
-            <button onClick={clearOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500/30 disabled:opacity-50"><Trash2 className="w-4 h-4" /> Clear</button>
-          </div>
-           <button onClick={convertToBill} disabled={currentOrder.items.length === 0} className="w-full flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 font-bold"><FileText className="w-5 h-5" /> Convert to Bill</button>
-        </div>
-      </div>
-
-      {/* Customer Selection Modal */}
-      {showCustomerSelect && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-neutral-800 rounded-xl p-6 w-[450px] border border-neutral-700">
-            <div className="flex items-center justify-between mb-4"><h2 className="text-xl font-bold text-white">Select Customer</h2><button onClick={() => setShowCustomerSelect(false)} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-             <div className="relative mb-4"><Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white pl-10 pr-4 py-2 rounded-lg focus:outline-none focus:border-amber-500" /></div>
-             <button onClick={() => setShowNewCustomer(!showNewCustomer)} className="w-full flex items-center justify-center gap-2 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 font-medium mb-4">
-               <Plus className="w-4 h-4" />
-               {showNewCustomer ? "Cancel" : "Add New Customer"}
-             </button>
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                 {customers?.filter((c) => c?.name?.toLowerCase().includes(customerSearch.toLowerCase()) || c?.phone?.includes(customerSearch)).map((customer) => (
-                   <button key={customer?.id || Math.random()} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); setCustomerSearch(""); }} className={`w-full flex items-center justify-between p-3 rounded-lg text-left ${
-                     currentOrder.customer.id === customer?.id ? "bg-blue-500 text-white" : "bg-neutral-700 text-white hover:bg-neutral-600"
-                   }`}>
-                     <div><p className="font-medium">{customer?.name}</p><p className="text-sm opacity-70">{customer?.phone || "Walk-in"}</p></div>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        customer?.tier === "VIP" ? "bg-purple-500/30 text-purple-300" : customer?.tier === "Gold" ? "bg-blue-500/30 text-yellow-300" : customer?.tier === "Silver" ? "bg-gray-400/30 text-gray-300" : "bg-blue-700/30 text-amber-300"
-                      }`}>{customer?.tier}</span>
-                   </button>
-                 )) || <p className="text-gray-500 text-sm">No customers found</p>}
-              </div>
-             {showNewCustomer && (
-               <div className="border-t border-neutral-700 pt-4 mt-4">
-                 <h3 className="text-sm font-medium text-gray-400 mb-3">Add New Customer</h3>
-                 <div className="space-y-3">
-                   <div>
-                     <label className="text-xs text-gray-500 mb-1 block">Name</label>
-                     <input type="text" placeholder="Customer name" value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500" />
-                   </div>
-                   <div className="grid grid-cols-2 gap-3">
-                     <div>
-                       <label className="text-xs text-gray-500 mb-1 block">Phone</label>
-                       <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500" />
-                     </div>
-                     <div>
-                       <label className="text-xs text-gray-500 mb-1 block">Tier</label>
-                       <select value={newCustomer.tier} onChange={(e) => setNewCustomer({ ...newCustomer, tier: e.target.value as "Bronze" | "Silver" | "Gold" | "VIP" })} className="w-full bg-neutral-700 text-white px-3 py-2 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500">
-                         <option value="Bronze">Bronze</option>
-                         <option value="Silver">Silver</option>
-                         <option value="Gold">Gold</option>
-                         <option value="VIP">VIP</option>
-                       </select>
-                     </div>
-                   </div>
-                   <div className="flex gap-2 pt-2">
-                     <button onClick={handleAddCustomer} disabled={!newCustomer.name.trim() || !newCustomer.phone.trim()} className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 font-medium">
-                       <Plus className="w-4 h-4" />
-                       Add Customer
-                     </button>
-                     <button onClick={() => setShowNewCustomer(false)} className="flex-1 py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 font-medium">Cancel</button>
-                   </div>
-                   {customerError && <p className="text-sm text-red-400">{customerError}</p>}
-                 </div>
-               </div>
-             )}
-           </div>
-         </div>
-       )}
-
-      {/* Held Orders Modal */}
-      {showHeldOrders && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-neutral-800 rounded-xl p-6 w-[450px] border border-neutral-700">
-            <div className="flex items-center justify-between mb-4"><h2 className="text-xl font-bold text-white">Held Orders</h2><button onClick={() => setShowHeldOrders(false)} className="text-gray-400 hover:text-white text-2xl">×</button></div>
-            {heldOrders.length === 0 ? <p className="text-center text-gray-500 py-8">No held orders</p> : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {heldOrders.map((order) => (
-                  <div key={order.id} className="bg-neutral-700 p-3 rounded-lg flex items-center justify-between">
-                    <div><p className="text-white font-medium">{order.id} ({order.customer.name})</p><p className="text-sm text-gray-400">{order.items.length} items | Ksh {order.total.toFixed(2)}</p><p className="text-xs text-gray-500">{order.heldAt ? new Date(order.heldAt).toLocaleString() : ""}</p></div>
-                    <button onClick={() => resumeOrder(order)} className="flex items-center gap-2 px-3 py-2 bg-green-500 text-black rounded-lg hover:bg-green-600"><Play className="w-4 h-4" /> Resume</button>
+            {/* Floating search results dropdown */}
+            {isSearchOpen && (
+              <div 
+                ref={searchDropdownRef}
+                className="absolute left-0 right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded shadow-lg z-[100] max-h-60 overflow-y-auto"
+              >
+                {loadingProducts ? (
+                  <div className="p-2 text-center text-gray-500 text-xs">
+                    <p>Loading...</p>
                   </div>
-                ))}
+                ) : filteredProducts.length === 0 ? (
+                  <div className="p-2 text-center text-gray-500 text-xs">
+                    <p>No products</p>
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredProducts.map((product) => {
+                      const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
+                      return (
+                        <button 
+                          key={product.id} 
+                          onClick={() => addToOrder(product)} 
+                          className="w-full text-left p-2 hover:bg-neutral-700 rounded transition-colors"
+                        >
+                          <p className="text-white text-xs truncate">{product.name}</p>
+                          <div className="flex items-center justify-between mt-0.5">
+                            <p className="text-amber-500 text-xs font-bold">Ksh {(product.price || 0).toFixed(2)}</p>
+                            <p className="text-gray-500 text-[10px]">Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
-      )}
 
-      {/* Payment Modal */}
-      {showChangeInput && billedOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-neutral-800 rounded-xl p-6 w-[400px] border border-neutral-700">
-            <h2 className="text-xl font-bold text-white mb-4">Payment</h2>
-            <div className="text-center mb-6"><p className="text-gray-400">Total Due</p><p className="text-4xl font-bold text-white">Ksh {billedOrder.total.toFixed(2)}</p></div>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button onClick={() => setPaymentMethod("cash")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "cash" ? "bg-green-500 text-black" : "bg-neutral-700 text-gray-300"}`}><Banknote className="w-6 h-6" /><span className="text-sm">Cash</span></button>
-              <button onClick={() => setPaymentMethod("mpesa")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "mpesa" ? "bg-green-500 text-black" : "bg-neutral-700 text-gray-300"}`}><Smartphone className="w-6 h-6" /><span className="text-sm">M-Pesa</span></button>
-              <button onClick={() => {
-                  const availableCredit = billedOrder!.customer.creditLimit - billedOrder!.customer.creditUsed;
-                  if (availableCredit < billedOrder!.total) {
-                    alert(`Insufficient credit. Available: Ksh ${availableCredit.toFixed(2)}`);
-                    return;
-                  }
-                  setPaymentMethod("account");
-                }} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "account" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><CreditCard className="w-6 h-6" /><span className="text-sm">Account</span></button>
-            </div>
-            {paymentMethod !== "account" && (
-              <>
-                <div className="mb-4"><label className="text-gray-400 text-sm">Amount Received</label><input type="number" value={changeAmount} onChange={(e) => setChangeAmount(e.target.value)} placeholder="Ksh 0.00" className="w-full bg-neutral-700 text-white text-2xl text-center px-4 py-3 rounded-lg mt-1" autoFocus /></div>
-                {parseFloat(changeAmount) > billedOrder.total && <div className="mb-4 p-3 bg-green-500/20 rounded-lg text-center"><p className="text-gray-400 text-sm">Change</p><p className="text-2xl font-bold text-green-500">Ksh {getChange().toFixed(2)}</p></div>}
-                <div className="grid grid-cols-4 gap-2 mb-4">
-                  {[100, 500, 1000, 2000].map((amt) => <button key={amt} onClick={() => setChangeAmount(String(amt))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600">+{amt}</button>)}
-                  <button onClick={() => setChangeAmount(String(Math.ceil(billedOrder.total / 100) * 100))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 col-span-2">Exact</button>
-                </div>
-              </>
+        {/* Compact Category Filters */}
+        <div className="flex gap-1 flex-wrap">
+          {categories.map((cat) => (
+            <button 
+              key={cat} 
+              onClick={() => setActiveCategory(cat)} 
+              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${activeCategory === cat ? "bg-blue-500 text-white" : "bg-neutral-800 text-gray-300 hover:bg-neutral-700"}`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Compact Shopping Cart - stretched to fill remaining space */}
+        <div className="flex-1 flex flex-col bg-neutral-800 rounded-lg border border-neutral-700 overflow-hidden min-h-0">
+          {/* Cart Header - Column labels */}
+          <div className="grid grid-cols-12 gap-1 px-2 py-1 bg-neutral-900/70 border-b border-neutral-700 text-[10px] font-semibold text-gray-400 uppercase tracking-wider items-center">
+            <div className="col-span-4">Item</div>
+            <div className="col-span-2 text-center">Unit</div>
+            <div className="col-span-2 text-center">Price</div>
+            <div className="col-span-2 text-center">Qty</div>
+            <div className="col-span-1 text-center">Amt</div>
+            <div className="col-span-1"></div>
+          </div>
+
+          {/* Cart Items - Single-row table layout */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {currentOrder.items.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                <ShoppingCart className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                <p className="text-xs">Empty</p>
+              </div>
+            ) : (
+               <div className="divide-y divide-neutral-700/50">
+                {currentOrder.items.map((item) => {
+                  const product = products.find(p => p.id === item.id);
+                  const availableUnits = product?.uom.units.filter(u => u.isActive) || [];
+                  const itemTotal = (item.unitPrice || 0) * item.quantity;
+                  const isOnSale = product?.category === "Shot" && isHappyHour;
+                  
+                  return (
+                    <div key={item.id} className="grid grid-cols-12 gap-1 px-2 py-1.5 items-center text-xs">
+                      {/* Item Name */}
+                      <div className={`col-span-4 truncate ${isOnSale ? "text-amber-500 font-bold text-base" : "text-white"}`}>
+                        {item.name}
+                      </div>
+                      
+                      {/* Unit Selector */}
+                      <div className="col-span-2">
+                        <select 
+                          value={item.unit}
+                          onChange={(e) => changeUnit(item.id, e.target.value)}
+                          className="w-full bg-neutral-700 text-gray-300 text-[10px] px-1 py-0.5 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 cursor-pointer h-5"
+                        >
+                          {availableUnits.map(unit => (
+                            <option key={unit.abbreviation} value={unit.abbreviation}>
+                              {unit.abbreviation}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Unit Price */}
+                      <div className={`col-span-2 text-right ${isOnSale ? "text-amber-600 font-bold text-base" : "text-gray-400"}`}>
+                        Ksh {(item.unitPrice || 0).toFixed(0)}
+                      </div>
+                      
+                      {/* Quantity Controls */}
+                      <div className="col-span-2 flex items-center justify-center gap-0.5">
+                        <button onClick={() => updateQuantity(item.id, -1)} className="w-5 h-5 flex items-center justify-center bg-neutral-700 rounded text-white text-xs hover:bg-neutral-600"><Minus className="w-3 h-3" /></button>
+                        <span className="text-white text-xs w-4 text-center font-mono">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.id, 1)} className="w-5 h-5 flex items-center justify-center bg-neutral-700 rounded text-white text-xs hover:bg-neutral-600"><Plus className="w-3 h-3" /></button>
+                      </div>
+                      
+                      {/* Amount (line total) */}
+                      <div className={`col-span-1 text-right ${isOnSale ? "text-amber-600 font-bold text-base" : "text-amber-500 font-bold"}`}>
+                        Ksh {itemTotal.toFixed(0)}
+                      </div>
+                      
+                      {/* Delete button */}
+                      <div className="col-span-1 flex justify-end">
+                        <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-500 p-0.5"><X className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
-            <div className="flex gap-2">
-              <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg">Cancel</button>
-              {paymentMethod === "account" ? (
-                <button onClick={completeSale} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600"><CheckCircle className="w-5 h-5" /> Charge to Account</button>
-              ) : (
-                <button onClick={completeSale} disabled={parseFloat(changeAmount) < billedOrder.total} className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500 text-black rounded-lg font-bold hover:bg-green-600 disabled:opacity-50"><CheckCircle className="w-5 h-5" /> Complete</button>
-              )}
-            </div>
           </div>
-        </div>
-      )}
 
-      {/* Receipt Modal */}
-      {showReceipt && billedOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
-            <div className="text-center mb-6"><CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" /><h2 className="text-2xl font-bold text-white">Payment Complete!</h2><p className="text-gray-400">Order {billedOrder.id}</p></div>
-            <div className="border-t border-b border-neutral-700 py-4 mb-4 space-y-2">
-              <div className="flex justify-between text-gray-400 text-sm"><span>Customer</span><span>{billedOrder.customer.name}</span></div>
-              <div className="flex justify-between text-gray-400 text-sm"><span>Items</span><span>{billedOrder.items.length}</span></div>
-              <div className="flex justify-between text-gray-400 text-sm"><span>Paid via</span><span className="capitalize">{paymentMethod === "account" ? "Account (Credit)" : paymentMethod}</span></div>
+          {/* Compact Summary Footer */}
+          <div className="border-t border-neutral-700 px-2 py-1.5 space-y-1">
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>Subtotal</span><span>Ksh {(currentOrder.subtotal || 0).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-white text-2xl font-bold mb-6"><span>Total Paid</span><span>Ksh {billedOrder.total.toFixed(2)}</span></div>
-            <div className="text-center text-green-400 mb-4">+{Math.floor(billedOrder.total / 10)} points earned!</div>
-            <div className="flex gap-2">
-              <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600"><Printer className="w-5 h-5" /> Print</button>
-               <button onClick={() => { setShowReceipt(false); setBilledOrder(null); setChangeAmount(""); }} className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">New Order</button>
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>VAT 16%</span><span>Ksh {(currentOrder.tax || 0).toFixed(0)}</span>
+            </div>
+            <div className="flex justify-between text-sm font-bold text-white pt-1 border-t border-neutral-700">
+              <span>Total</span><span>Ksh {(currentOrder.total || 0).toFixed(0)}</span>
             </div>
           </div>
+
+          {/* Compact Action Buttons */}
+          <div className="px-2 py-1.5 border-t border-neutral-700">
+            <div className="flex gap-1 mb-1">
+              <button onClick={holdOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1 py-1 bg-neutral-700 text-white text-xs rounded hover:bg-neutral-600 disabled:opacity-50"><Pause className="w-3 h-3" /> Hold</button>
+              <button onClick={clearOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1 py-1 bg-red-500/20 text-red-500 text-xs rounded hover:bg-red-500/30 disabled:opacity-50"><Trash2 className="w-3 h-3" /> Clear</button>
+            </div>
+            <button onClick={convertToBill} disabled={currentOrder.items.length === 0} className="w-full flex items-center justify-center gap-1.5 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 font-bold"><FileText className="w-4 h-4" /> Bill</button>
+          </div>
         </div>
-      )}
-    </div>
-  );
+      </div>
+
+{showCustomerSelect && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">Select Customer</h2>
+            <button onClick={() => setShowCustomerSelect(false)}><X className="w-5 h-5 text-gray-400" /></button>
+          </div>
+          <div className="mb-4">
+            <input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500" />
+            <button onClick={() => setShowNewCustomer(!showNewCustomer)} className="w-full py-2 mt-2 text-blue-400 text-sm hover:text-blue-300">+ Create new customer</button>
+          </div>
+          {showNewCustomer && (
+            <div className="mb-4">
+              <input type="text" placeholder="Name" value={newCustomer.name} onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-blue-500" />
+              <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-blue-500" />
+              {customerError && <p className="text-red-500 text-sm mb-2">{customerError}</p>}
+              <button onClick={handleAddCustomer} className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Add Customer</button>
+            </div>
+          )}
+          <div className="flex-1 overflow-y-auto max-h-64">
+            {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map((customer) => (
+              <button key={customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2 hover:bg-neutral-700 rounded-lg mb-1">
+                <p className="text-white">{customer.name}</p>
+                <p className="text-gray-400 text-sm">{customer.phone}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Held Orders Modal */}
+    {showHeldOrders && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">Held Orders</h2>
+            <button onClick={() => setShowHeldOrders(false)}><X className="w-5 h-5 text-gray-400" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto max-h-64">
+            {heldOrders.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No held orders</p>
+            ) : (
+              heldOrders.map((order) => (
+                <div key={order.id} className="bg-neutral-700/50 p-3 rounded-lg mb-2">
+                  <p className="text-white font-medium">{order.customer.name}</p>
+                  <p className="text-gray-400 text-sm">{order.items.length} items</p>
+                  <p className="text-amber-500 font-bold">Ksh {order.total.toFixed(2)}</p>
+                  <button onClick={() => resumeOrder(order)} className="w-full mt-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Resume</button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Payment Modal */}
+    {billedOrder && showChangeInput && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-white">Payment</h2>
+            <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }}><X className="w-5 h-5 text-gray-400" /></button>
+          </div>
+          <div className="mb-4 text-center">
+            <p className="text-gray-400">Total Amount</p>
+            <p className="text-3xl font-bold text-white">Ksh {billedOrder.total.toFixed(2)}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <button onClick={() => setPaymentMethod("cash")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "cash" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Banknote className="w-6 h-6" /><span className="text-sm">Cash</span></button>
+            <button onClick={() => setPaymentMethod("mpesa")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "mpesa" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Smartphone className="w-6 h-6" /><span className="text-sm">M-Pesa</span></button>
+            <button onClick={() => setPaymentMethod("account")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "account" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><CreditCard className="w-6 h-6" /><span className="text-sm">Account</span></button>
+          </div>
+          {paymentMethod !== "account" && (
+            <>
+              <div className="mb-4"><label className="text-gray-400 text-sm">Amount Received</label><input type="number" value={changeAmount} onChange={(e) => setChangeAmount(e.target.value)} placeholder="Ksh 0.00" className="w-full bg-neutral-700 text-white text-2xl text-center px-4 py-3 rounded-lg mt-1" autoFocus /></div>
+              {parseFloat(changeAmount) > billedOrder.total && <div className="mb-4 p-3 bg-green-500/20 rounded-lg text-center"><p className="text-gray-400 text-sm">Change</p><p className="text-2xl font-bold text-green-500">Ksh {getChange().toFixed(2)}</p></div>}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                {[100, 500, 1000, 2000].map((amt) => <button key={amt} onClick={() => setChangeAmount(String(amt))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600">+{amt}</button>)}
+                <button onClick={() => setChangeAmount(String(Math.ceil(billedOrder.total / 100) * 100))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 col-span-2">Exact</button>
+              </div>
+            </>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg">Cancel</button>
+            {paymentMethod === "account" ? (
+              <button onClick={completeSale} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600"><CheckCircle className="w-5 h-5" /> Charge to Account</button>
+            ) : (
+              <button onClick={completeSale} disabled={parseFloat(changeAmount) < billedOrder.total} className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500 text-black rounded-lg font-bold hover:bg-green-600 disabled:opacity-50"><CheckCircle className="w-5 h-5" /> Complete</button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Receipt Modal */}
+    {showReceipt && billedOrder && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+          <div className="text-center mb-6"><CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" /><h2 className="text-2xl font-bold text-white">Payment Complete!</h2><p className="text-gray-400">Order {billedOrder.id}</p></div>
+          <div className="border-t border-b border-neutral-700 py-4 mb-4 space-y-2">
+            <div className="flex justify-between text-gray-400 text-sm"><span>Customer</span><span>{billedOrder.customer.name}</span></div>
+            <div className="flex justify-between text-gray-400 text-sm"><span>Items</span><span>{billedOrder.items.length}</span></div>
+            <div className="flex justify-between text-gray-400 text-sm"><span>Paid via</span><span className="capitalize">{paymentMethod === "account" ? "Account (Credit)" : paymentMethod}</span></div>
+          </div>
+          <div className="flex justify-between text-white text-2xl font-bold mb-6"><span>Total Paid</span><span>Ksh {billedOrder.total.toFixed(2)}</span></div>
+          <div className="text-center text-green-400 mb-4">+{Math.floor(billedOrder.total / 10)} points earned!</div>
+          <div className="flex gap-2">
+            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600"><Printer className="w-5 h-5" /> Print</button>
+             <button onClick={() => { setShowReceipt(false); setBilledOrder(null); setChangeAmount(""); }} className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">New Order</button>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+);
 }

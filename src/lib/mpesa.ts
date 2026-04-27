@@ -11,10 +11,6 @@ const {
   MPESA_ENV = "sandbox",
 } = process.env;
 
-if (!MPESA_CONSUMER_KEY || !MPESA_CONSUMER_SECRET || !MPESA_PASSKEY || !MPESA_SHORTCODE) {
-  throw new Error("M-Pesa configuration missing in environment variables");
-}
-
 // Safaricom URLs
 const BASE_URL = MPESA_ENV === "production"
   ? "https://api.safaricom.co.ke"
@@ -22,6 +18,15 @@ const BASE_URL = MPESA_ENV === "production"
 
 const AUTH_URL = `${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`;
 const STK_PUSH_URL = `${BASE_URL}/mpesa/stkpush/v1/processrequest`;
+
+/**
+ * Validate M-Pesa configuration
+ */
+function validateMpesaConfig() {
+  if (!MPESA_CONSUMER_KEY || !MPESA_CONSUMER_SECRET || !MPESA_PASSKEY || !MPESA_SHORTCODE) {
+    throw new Error("M-Pesa configuration missing in environment variables");
+  }
+}
 
 /**
  * Generate M-Pesa password (base64 encoded)
@@ -46,6 +51,8 @@ let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
 
 async function getAccessToken(): Promise<string> {
+  validateMpesaConfig();
+  
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
   }
@@ -82,6 +89,7 @@ export async function initiateSTKPush(params: {
   transactionDesc?: string;
   orderId?: string;
 }): Promise<{ success: boolean; message: string; checkoutRequestId?: string; merchantRequestId?: string }> {
+  validateMpesaConfig();
   await connectDB();
 
   const { phoneNumber, amount, accountReference, transactionDesc = "Payment", orderId } = params;

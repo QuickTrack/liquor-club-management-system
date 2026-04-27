@@ -204,6 +204,9 @@ export interface IOrderItem {
   price: number;
   quantity: number;
   category: string;
+  unit: string; // Selected unit abbreviation (e.g., "kg", "g", "lbs", "oz", "bottle", "pack")
+  conversionFactor: number; // Conversion factor from base unit to selected unit
+  unitPrice: number; // Price per selected unit
 }
 
 export interface IOrder extends Document {
@@ -227,6 +230,9 @@ const OrderItemSchema = new Schema({
   price: Number,
   quantity: Number,
   category: String,
+  unit: String,
+  conversionFactor: Number,
+  unitPrice: Number,
 }, { _id: false });
 
 const OrderSchema = new Schema<IOrder>({

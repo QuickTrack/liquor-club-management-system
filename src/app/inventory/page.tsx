@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Package,
   Search,
@@ -24,6 +24,7 @@ interface UnitConversion {
 }
 
 interface Product {
+  _id?: string;
   id: number;
   name: string;
   category: string;
@@ -39,147 +40,38 @@ interface Product {
   status: "In Stock" | "Low Stock" | "Out of Stock";
 }
 
-const products: Product[] = [
-  {
-    id: 1,
-    name: "Jack Daniel's Old No. 7",
-    category: "Bourbon",
-    baseUnit: "bottle",
-    stockQuantity: 24,
-    reorderLevel: 10,
-    costPrice: 2000,
-    sellPrice: 3000,
-    supplier: "Kenya Breweries",
-    alternateUnits: [
-      { unit: "6-Pack", conversionFactor: 6, sellPrice: 18000, costPrice: 12000 },
-      { unit: "Case", conversionFactor: 12, sellPrice: 36000, costPrice: 24000 },
-    ],
-    status: "In Stock",
-  },
-  {
-    id: 2,
-    name: "Grey Goose Vodka",
-    category: "Vodka",
-    baseUnit: "bottle",
-    stockQuantity: 18,
-    reorderLevel: 10,
-    costPrice: 3000,
-    sellPrice: 4500,
-    supplier: "EABL",
-    alternateUnits: [],
-    status: "In Stock",
-  },
-  {
-    id: 3,
-    name: "Moet & Chandon",
-    category: "Champagne",
-    baseUnit: "bottle",
-    stockQuantity: 0,
-    reorderLevel: 5,
-    costPrice: 8000,
-    sellPrice: 12000,
-    supplier: "French Wines",
-    alternateUnits: [
-      { unit: "Half-Case", conversionFactor: 6, sellPrice: 72000, costPrice: 48000 },
-    ],
-    status: "Out of Stock",
-  },
-  {
-    id: 4,
-    name: "Johnnie Walker Blue",
-    category: "Scotch",
-    baseUnit: "bottle",
-    stockQuantity: 12,
-    reorderLevel: 8,
-    costPrice: 15000,
-    sellPrice: 20000,
-    supplier: "EABL",
-    alternateUnits: [],
-    status: "In Stock",
-  },
-  {
-    id: 5,
-    name: "Patron Silver Tequila",
-    category: "Tequila",
-    baseUnit: "bottle",
-    stockQuantity: 6,
-    reorderLevel: 10,
-    costPrice: 3500,
-    sellPrice: 4500,
-    supplier: "MexImports",
-    alternateUnits: [],
-    status: "Low Stock",
-  },
-  {
-    id: 6,
-    name: "Hennessy VS",
-    category: "Cognac",
-    baseUnit: "bottle",
-    stockQuantity: 8,
-    reorderLevel: 10,
-    costPrice: 2800,
-    sellPrice: 4000,
-    supplier: "EABL",
-    alternateUnits: [],
-    status: "Low Stock",
-  },
-  {
-    id: 7,
-    name: "Heineken Draft",
-    category: "Beer",
-    baseUnit: "keg",
-    stockQuantity: 50,
-    reorderLevel: 20,
-    costPrice: 2500,
-    sellPrice: 3500,
-    supplier: "Kenya Breweries",
-    alternateUnits: [
-      { unit: "Half-Keg", conversionFactor: 0.5, sellPrice: 1750, costPrice: 1250 },
-    ],
-    status: "In Stock",
-  },
-  {
-    id: 8,
-    name: "Guinness",
-    category: "Beer",
-    baseUnit: "crate",
-    stockQuantity: 30,
-    reorderLevel: 15,
-    costPrice: 1800,
-    sellPrice: 2500,
-    supplier: "Kenya Breweries",
-    alternateUnits: [],
-    status: "In Stock",
-  },
-  {
-    id: 9,
-    name: "Vodka Shots",
-    category: "Shots",
-    baseUnit: "shot",
-    stockQuantity: 200,
-    reorderLevel: 100,
-    costPrice: 50,
-    sellPrice: 100,
-    supplier: "EABL",
-    alternateUnits: [
-      { unit: "50ml", conversionFactor: 1, sellPrice: 100, costPrice: 50 },
-    ],
-    status: "In Stock",
-  },
-  {
-    id: 10,
-    name: "Tequila Shots",
-    category: "Shots",
-    baseUnit: "shot",
-    stockQuantity: 80,
-    reorderLevel: 100,
-    costPrice: 80,
-    sellPrice: 150,
-    supplier: "MexImports",
-    alternateUnits: [],
-    status: "Low Stock",
-  },
-];
+// Helper to transform API product data to frontend format
+const transformProduct = (p: any): Product => {
+  // Extract alternate units from UOM, filtering out base unit
+  const alternateUnits = p.uom?.units
+    ?.filter((u: any) => !u.isBase)
+    .map((u: any) => ({
+      unit: u.name,
+      conversionFactor: u.conversionFactor,
+      sellPrice: 0,
+      costPrice: undefined,
+    })) || [];
+
+  // Generate a numeric ID from the MongoDB ObjectId (last 6 hex chars)
+  const idNum = p._id ? parseInt(p._id.toString().slice(-6), 16) : Math.floor(Math.random() * 100000);
+
+  return {
+    _id: p._id.toString(),
+    id: idNum,
+    name: p.name,
+    category: p.category,
+    baseUnit: p.uom?.baseUnit || p.unit || "bottle",
+    stockQuantity: p.stock,
+    reorderLevel: p.reorderLevel,
+    costPrice: p.costPrice,
+    sellPrice: p.sellPrice,
+    supplier: p.supplier,
+    expiryDate: p.expiryDate,
+    batchNo: p.batchNo,
+    status: p.status as "In Stock" | "Low Stock" | "Out of Stock",
+    alternateUnits,
+  };
+};
 
 const categories = ["All", "Bourbon", "Vodka", "Scotch", "Champagne", "Cognac", "Tequila", "Beer", "Shots"];
 
@@ -191,22 +83,129 @@ export default function InventoryPage() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showEditProduct, setShowEditProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [productList, setProductList] = useState<Product[]>(products);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
-  const handleAddProduct = (newProduct: Omit<Product, "id" | "status"> ) => {
-      const product: Product = {
-        ...newProduct,
-        id: Date.now(),
-        status: newProduct.stockQuantity === 0 ? "Out of Stock" : newProduct.stockQuantity <= newProduct.reorderLevel ? "Low Stock" : "In Stock",
-      };
-      setProductList([...productList, product]);
-      setShowAddProduct(false);
+  // Fetch products on mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch("/api/products");
+        if (res.ok) {
+          const data = await res.json();
+          setProductList(data.map(transformProduct));
+        }
+      } catch (error) {
+        console.error("Failed to fetch products:", error);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+   const handleAddProduct = async (newProduct: Omit<Product, "id" | "status"> ) => {
+       try {
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newProduct.name,
+            category: newProduct.category,
+            stock: newProduct.stockQuantity,
+            reorderLevel: newProduct.reorderLevel,
+            costPrice: newProduct.costPrice,
+            sellPrice: newProduct.sellPrice,
+            supplier: newProduct.supplier,
+            uom: {
+              baseUnit: newProduct.baseUnit,
+              units: [
+                {
+                  name: newProduct.baseUnit,
+                  abbreviation: newProduct.baseUnit,
+                  isBase: true,
+                  conversionFactor: 1,
+                  isActive: true,
+                },
+                ...newProduct.alternateUnits.map((u) => ({
+                  name: u.unit,
+                  abbreviation: u.unit,
+                  isBase: false,
+                  conversionFactor: u.conversionFactor,
+                  isActive: true,
+                })),
+              ],
+            },
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.error || "Failed to create product");
+          return;
+        }
+        // Close modal and refresh
+        setShowAddProduct(false);
+        // Refetch products from API
+        const response = await fetch("/api/products");
+        if (response.ok) {
+          const productsData = await response.json();
+          const transformedProducts = productsData.map(transformProduct);
+          setProductList(transformedProducts);
+        }
+      } catch (error) {
+        console.error("Error adding product:", error);
+        alert("Failed to create product");
+      }
     };
 
-  const handleEditProduct = (updated: Product) => {
-    setProductList(productList.map(p => p.id === updated.id ? updated : p));
-    setShowEditProduct(false);
-    setEditingProduct(null);
+  const handleEditProduct = async (updated: Omit<Product, "id" | "status"> & { id: number }) => {
+    try {
+      const res = await fetch(`/api/products`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...updated,
+          uom: {
+            baseUnit: updated.baseUnit,
+            units: [
+              {
+                name: updated.baseUnit,
+                abbreviation: updated.baseUnit,
+                isBase: true,
+                conversionFactor: 1,
+                isActive: true,
+              },
+              ...updated.alternateUnits.map((u) => ({
+                name: u.unit,
+                abbreviation: u.unit,
+                isBase: false,
+                conversionFactor: u.conversionFactor,
+                isActive: true,
+              })),
+            ],
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Failed to update product");
+        return;
+      }
+
+      // Refetch products from API
+      const response = await fetch("/api/products");
+      if (response.ok) {
+        const productsData = await response.json();
+        setProductList(productsData);
+      }
+
+      setShowEditProduct(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Error updating product:", error);
+      alert("Failed to update product");
+    }
   };
 
   const filteredProducts = productList.filter((p) => {
@@ -256,7 +255,7 @@ export default function InventoryPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-neutral-800 rounded-xl p-4 border border-neutral-700">
           <Package className="w-8 h-8 text-amber-500 mb-2" />
-          <p className="text-2xl font-bold text-white">{products.length}</p>
+           <p className="text-2xl font-bold text-white">{productList.length}</p>
           <p className="text-gray-400 text-sm">Total Products</p>
         </div>
         <div className="bg-neutral-800 rounded-xl p-4 border border-neutral-700">
@@ -536,30 +535,82 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Add Product Modal */}
-      {showAddProduct && (
-        <AddProductModal
-          onClose={() => setShowAddProduct(false)}
-          onSave={handleAddProduct}
-          categories={categories.filter(c => c !== "All")}
-        />
-      )}
-
-       {/* Edit Product Modal */}
-       {showEditProduct && editingProduct && (
+       {/* Add Product Modal */}
+       {showAddProduct && (
          <AddProductModal
-           onClose={() => { setShowEditProduct(false); setEditingProduct(null); }}
-           onSave={(updated) => {
-             setProductList(productList.map(p => p.id === editingProduct.id 
-               ? { ...updated, id: editingProduct.id, status: editingProduct.status }
-               : p
-             ));
-             setShowEditProduct(false);
-             setEditingProduct(null);
-           }}
-           categories={categories.filter(c => c !== "All")}
+           onClose={() => setShowAddProduct(false)}
+           onSave={handleAddProduct}
          />
        )}
+
+        {/* Edit Product Modal */}
+        {showEditProduct && editingProduct && (
+          <AddProductModal
+            onClose={() => { setShowEditProduct(false); setEditingProduct(null); }}
+            onSave={async (updated) => {
+              try {
+                if (!editingProduct?._id) {
+                  alert("Missing product ID");
+                  return;
+                }
+                const res = await fetch(`/api/products`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    id: editingProduct._id,
+                    name: updated.name,
+                    category: updated.category,
+                    stock: updated.stockQuantity,
+                    reorderLevel: updated.reorderLevel,
+                    costPrice: updated.costPrice,
+                    sellPrice: updated.sellPrice,
+                    supplier: updated.supplier,
+                    uom: {
+                      baseUnit: updated.baseUnit,
+                      units: [
+                        {
+                          name: updated.baseUnit,
+                          abbreviation: updated.baseUnit,
+                          isBase: true,
+                          conversionFactor: 1,
+                          isActive: true,
+                        },
+                        ...updated.alternateUnits.map((u) => ({
+                          name: u.unit,
+                          abbreviation: u.unit,
+                          isBase: false,
+                          conversionFactor: u.conversionFactor,
+                          isActive: true,
+                        })),
+                      ],
+                    },
+                  }),
+                });
+
+                if (!res.ok) {
+                  const err = await res.json();
+                  alert(err.error || "Failed to update product");
+                  return;
+                }
+
+                // Refetch products from API and transform
+                const response = await fetch("/api/products");
+                if (response.ok) {
+                  const productsData = await response.json();
+                  const transformedProducts = productsData.map(transformProduct);
+                  setProductList(transformedProducts);
+                }
+
+                setShowEditProduct(false);
+                setEditingProduct(null);
+              } catch (error) {
+                console.error("Error updating product:", error);
+                alert("Failed to update product");
+              }
+            }}
+            product={editingProduct}
+          />
+        )}
     </div>
   );
 }

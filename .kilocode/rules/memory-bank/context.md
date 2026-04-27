@@ -8,6 +8,12 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 
 ## Recently Completed
 
+- [x] **Dynamic categories in AddProductModal**: Category dropdown now fetches active categories from the database via `/api/categories`; new categories can be added inline via POST to API
+- [x] **Product grid removal**: Completely removed products grid from POS; interface now consists of header, customer selector, search dropdown, category filters, and order cart that fills remaining viewport
+- [x] **Cart table format**: Reordered cart item display into single-row table layout with columns: Item Name (col-span-4), Unit selector (col-span-2), Unit Price (col-span-2, right-aligned), Quantity controls (col-span-2, centered), Line Total Amount (col-span-1, right-aligned), and Delete button (col-span-1)
+- [x] **Sale product highlighting**: Products on Happy Hour (Shot category) display with amber border/background, bold font, increased font size (+2pt), and "✨ Happy Hour" badge
+- [x] **VAT-inclusive tax calculation**: Changed tax computation to extract VAT from gross (inclusive) prices using formula: Tax = Gross − (Gross ÷ 1.16); subtotal now stores net amount, total stores gross amount
+- [x] **POS layout optimization**: Redesigned POS to maximize vertical space using ultra-compact horizontal layout (xs fonts, tight spacing, minimal padding), consolidated header into single row, and compact customer/order controls
 - [x] Bright/Dark theme toggle with persistence and premium design
 - [x] Fixed light theme by adding CSS variable overrides for `[data-theme="bright"]` in globals.css
 - [x] POS/Billing page with touch-friendly interface, happy hour, split bills, tabs
@@ -31,6 +37,10 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **M-Pesa Integration**: STK Push with full callback handling, transaction tracking, environment config
 - [x] **Category Manager**: Full CRUD for product categories with color picker, icon emoji, sort ordering, active flag, and dedicated UI page
 - [x] **Favicon Update**: Updated favicon to use GlassWater icon from sidebar navigation, added SVG favicon to public directory
+- [x] **Unit Selection in Shopping Cart**: Dynamic unit conversion dropdown (kg, g, lbs, oz, pieces, packs, sets) with real-time price/total updates, persisted throughout checkout process; includes database schema updates (OrderItem with unit, conversionFactor, unitPrice) and API integration with ProductUOM model
+- [x] **Fixed unit price calculation**: Prices now correctly calculated based on base product price and unit conversion factor, eliminating rounding errors when switching between units
+- [x] **Product persistence**: AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format
+- [x] **Inventory data loading**: Inventory page now loads products from database on mount, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations
 
 ## Current Structure
 
@@ -135,6 +145,12 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | 2026-04-26 | **Category Manager** - Added Category schema, CRUD API, UI page with color picker, icons, sorting, and sidebar navigation |
 | 2026-04-26 | **Waiter Handover SOP** - Comprehensive Standard Operating Procedure for inventory accuracy and financial accountability with 6 standardized forms |
 | 2026-04-26 | **Favicon Update** - Updated favicon to use GlassWater icon from sidebar navigation, added SVG favicon to public directory |
+| 2026-04-27 | **Dynamic category fetching** - AddProductModal now fetches categories from `/api/categories` endpoint on mount; added loading state, disabled select during fetch, and inline category creation via POST request |
+| 2026-04-27 | **Product persistence** - AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches products after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format |
+| 2026-04-27 | **Inventory data loading** - Inventory page now loads products from database on mount using the products API, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations |
+| 2026-04-27 | **Product persistence** - AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches products after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format |
+| 2026-04-27 | **Inventory data loading** - Inventory page now loads products from database on mount using the products API, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations |
+| 2026-04-27 | **Fixed search bar** - Added useMemo for filtered products, improved search with trim() and empty term handling; added useMemo dependency on products, searchTerm, and activeCategory |
 
 ## Quick Start Guide
 
