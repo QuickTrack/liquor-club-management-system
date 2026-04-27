@@ -21,7 +21,8 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] Bright/Dark theme toggle with persistence and premium design
 - [x] Fixed light theme by adding CSS variable overrides for `[data-theme="bright"]` in globals.css
 - [x] POS/Billing page with touch-friendly interface, happy hour, split bills, tabs
-- [x] Enhanced Inventory with real-time stock tracking, batch tracking, reorder alerts
+- [x] **Enhanced Inventory** with real-time stock tracking, batch tracking, reorder alerts
+- [x] **Inventory Management Service**: Comprehensive stock update service with automatic stock decrement on order completion, unit-aware stock management (UOM conversions), negative stock prevention, real-time audit logging, and reorder flagging
 - [x] Bar/Drink Management with recipes, happy hour scheduling
 - [x] Customer/Membership Management with loyalty tiers, credit tracking
 - [x] Staff/User Management with roles, shifts, commission tracking
@@ -109,6 +110,9 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | `src/lib/db/seed.ts` | Seed script with demo data (includes users) |
 | `src/lib/utils/uomPricing.ts` | ensureUnitPrices utility for backfill |
 | `src/lib/db/migrations/backfill-unit-prices.ts` | One-time migration to fix legacy unit pricing data |
+| `src/lib/services/inventoryService.ts` | Core inventory management service with stock updates, UOM conversions, audit logging, and reorder flagging |
+| `src/lib/services/auditLogService.ts` | Audit logging utilities for inventory transactions |
+| `src/types/inventory.d.ts` | Type definitions for inventory operations |
 
 ### Tests
 | File | Purpose |
@@ -141,6 +145,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | 2026-04-27 | **Product persistence** - AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches products after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format |
 | 2026-04-27 | **Inventory data loading** - Inventory page now loads products from database on mount using the products API, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations |
 | 2026-04-27 | **Fixed search bar** - Added useMemo for filtered products, improved search with trim() and empty term handling; added useMemo dependency on products, searchTerm, and activeCategory |
+| 2026-04-27 | **Inventory Management Service** - Created comprehensive inventory service with automatic stock updates on order completion, unit-aware UOM conversions, negative stock prevention, real-time audit logging, and reorder flagging; integrated into order API with Mongoose transactions |
 
 ## Quick Start Guide
 
@@ -171,8 +176,9 @@ bun test
 ### Features Implemented:
 1. POS - Touch-friendly billing with happy hour, split bills, customer-based orders
 2. Inventory - Real-time stock, batch tracking, reorder alerts
-3. Drinks - Recipes, menu engineering, happy hour scheduling
-4. Customers - Loyalty tiers (Bronze/Silver/Gold/VIP), credit limits, points
+3. **Inventory Management Service** - Automatic stock updates on order completion, unit-aware stock management (UOM conversions), negative stock prevention, real-time audit logging, and reorder flagging
+4. Drinks - Recipes, menu engineering, happy hour scheduling
+5. Customers - Loyalty tiers (Bronze/Silver/Gold/VIP), credit limits, points
 5. Staff - Roles, shifts, commission tracking
 6. Reports - Sales charts, top products, staff performance
 7. Financial - Income/expense tracking

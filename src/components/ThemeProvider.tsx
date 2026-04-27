@@ -21,7 +21,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(initial);
     document.documentElement.setAttribute("data-theme", initial);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setLoaded(true);
   }, []);
 

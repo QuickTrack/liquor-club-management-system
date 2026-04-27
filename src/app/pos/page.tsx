@@ -481,37 +481,37 @@ const completeSale = () => {
       <div className="flex-1 flex flex-col gap-1 min-h-0">
         {/* Header Row - All in one horizontal line */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-sm font-bold text-white truncate">New Order</h1>
-            <span className="text-xs text-gray-400 truncate hidden sm:inline">{mounted ? currentOrder.id : '...'}</span>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-1 px-1.5 py-1 bg-neutral-700 text-white text-xs rounded hover:bg-neutral-600">
-              <Pause className="w-3 h-3" /> <span className="hidden sm:inline">{heldOrders.length}</span>
-            </button>
-            <button onClick={() => setIsHappyHour(!isHappyHour)} className={`flex items-center gap-1 px-1.5 py-1 rounded text-xs font-medium ${isHappyHour ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
-              <Flame className="w-3 h-3" /> <span className="hidden sm:inline">HH</span>
-            </button>
-          </div>
+           <div className="flex items-center gap-2 min-w-0">
+             <h1 className="text-base font-bold text-white truncate">New Order</h1>
+             <span className="text-sm text-gray-400 truncate hidden sm:inline">{mounted ? currentOrder.id : '...'}</span>
+           </div>
+           <div className="flex items-center gap-1 flex-shrink-0">
+             <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-1 px-2 py-1.5 bg-neutral-700 text-white text-sm rounded hover:bg-neutral-600">
+               <Pause className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{heldOrders.length}</span>
+             </button>
+             <button onClick={() => setIsHappyHour(!isHappyHour)} className={`flex items-center gap-1 px-2 py-1.5 rounded text-sm font-medium ${isHappyHour ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
+               <Flame className="w-3.5 h-3.5" /> <span className="hidden sm:inline">HH</span>
+             </button>
+           </div>
         </div>
 
         {/* Controls Row - Single horizontal line with all controls */}
         <div className="flex items-center gap-1">
-          <button onClick={() => setShowCustomerSelect(true)} className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium shrink-0 ${currentOrder.customer.tier === "VIP" ? "bg-purple-500 text-white" : currentOrder.customer.tier === "Gold" ? "bg-blue-500 text-white" : currentOrder.customer.tier === "Silver" ? "bg-gray-400 text-black" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
-            <Users className="w-3 h-3" /> <span className="truncate max-w-[80px]">{currentOrder.customer.name}</span>
+          <button onClick={() => setShowCustomerSelect(true)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium shrink-0 ${currentOrder.customer.tier === "VIP" ? "bg-purple-500 text-white" : currentOrder.customer.tier === "Gold" ? "bg-blue-500 text-white" : currentOrder.customer.tier === "Silver" ? "bg-gray-400 text-black" : "bg-neutral-700 text-gray-300 hover:bg-neutral-600"}`}>
+            <Users className="w-3.5 h-3.5" /> <span className="truncate max-w-[80px]">{currentOrder.customer.name}</span>
           </button>
 
           {/* Search with floating dropdown overlay */}
           <div className="relative flex-1 min-w-0">
-            <input 
-              ref={searchInputRef}
-              type="text" 
-              placeholder="Search..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onFocus={() => setIsSearchOpen(true)}
-              className="w-full bg-neutral-800 border border-neutral-700 text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500"
-            />
+             <input 
+               ref={searchInputRef}
+               type="text" 
+               placeholder="Search..." 
+               value={searchTerm} 
+               onChange={(e) => setSearchTerm(e.target.value)}
+               onFocus={() => setIsSearchOpen(true)}
+               className="w-full bg-neutral-800 border border-neutral-700 text-white text-sm px-3 py-1.5 rounded focus:outline-none focus:border-blue-500"
+             />
 
             {/* Floating search results dropdown */}
             {isSearchOpen && (
@@ -519,46 +519,46 @@ const completeSale = () => {
                 ref={searchDropdownRef}
                 className="absolute left-0 right-0 top-full mt-1 bg-neutral-800 border border-neutral-700 rounded shadow-lg z-[100] max-h-60 overflow-y-auto"
               >
-                {loadingProducts ? (
-                  <div className="p-2 text-center text-gray-500 text-xs">
-                    <p>Loading...</p>
-                  </div>
-                ) : filteredProducts.length === 0 ? (
-                  <div className="p-2 text-center text-gray-500 text-xs">
-                    <p>No products</p>
-                  </div>
-                ) : (
-                  <div className="p-1">
-                    {filteredProducts.map((product) => {
-                      const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
-                      return (
-                        <button 
-                          key={product.id} 
-                          onClick={() => addToOrder(product)} 
-                          className="w-full text-left p-2 hover:bg-neutral-700 rounded transition-colors"
-                        >
-                          <p className="text-white text-xs truncate">{product.name}</p>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <p className="text-amber-500 text-xs font-bold">Ksh {(product.price || 0).toFixed(2)}</p>
-                            <p className="text-gray-500 text-[10px]">Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                 {loadingProducts ? (
+                   <div className="p-3 text-center text-gray-500 text-sm">
+                     <p>Loading...</p>
+                   </div>
+                 ) : filteredProducts.length === 0 ? (
+                   <div className="p-3 text-center text-gray-500 text-sm">
+                     <p>No products</p>
+                   </div>
+                 ) : (
+                   <div className="p-2">
+                     {filteredProducts.map((product) => {
+                       const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
+                       return (
+                         <button 
+                           key={product.id} 
+                           onClick={() => addToOrder(product)} 
+                           className="w-full text-left p-2.5 hover:bg-neutral-700 rounded transition-colors"
+                         >
+                           <p className="text-white text-sm truncate">{product.name}</p>
+                           <div className="flex items-center justify-between mt-1">
+                             <p className="text-amber-500 text-sm font-bold">Ksh {(product.price || 0).toFixed(2)}</p>
+                             <p className="text-gray-500 text-xs">Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
+                           </div>
+                         </button>
+                       );
+                     })}
+                   </div>
+                 )}
               </div>
             )}
           </div>
         </div>
 
         {/* Compact Category Filters */}
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
           {categories.map((cat) => (
             <button 
               key={cat} 
               onClick={() => setActiveCategory(cat)} 
-              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${activeCategory === cat ? "bg-blue-500 text-white" : "bg-neutral-800 text-gray-300 hover:bg-neutral-700"}`}
+              className={`px-2 py-1 rounded text-sm font-medium ${activeCategory === cat ? "bg-blue-500 text-white" : "bg-neutral-800 text-gray-300 hover:bg-neutral-700"}`}
             >
               {cat}
             </button>
@@ -568,7 +568,7 @@ const completeSale = () => {
         {/* Compact Shopping Cart - stretched to fill remaining space */}
         <div className="flex-1 flex flex-col bg-neutral-800 rounded-lg border border-neutral-700 overflow-hidden min-h-0">
           {/* Cart Header - Column labels */}
-          <div className="grid grid-cols-12 gap-1 px-2 py-1 bg-neutral-900/70 border-b border-neutral-700 text-[10px] font-semibold text-gray-400 uppercase tracking-wider items-center">
+          <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-neutral-900/70 border-b border-neutral-700 text-sm font-semibold text-gray-400 uppercase tracking-wider items-center">
             <div className="col-span-4">Item</div>
             <div className="col-span-2 text-center">Unit</div>
             <div className="col-span-2 text-center">Price</div>
@@ -580,88 +580,88 @@ const completeSale = () => {
           {/* Cart Items - Single-row table layout */}
           <div className="flex-1 overflow-y-auto min-h-0">
             {currentOrder.items.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
-                <ShoppingCart className="w-6 h-6 mx-auto mb-1 opacity-50" />
-                <p className="text-xs">Empty</p>
+              <div className="text-center py-6 text-gray-500">
+                <ShoppingCart className="w-8 h-8 mx-auto mb-1.5 opacity-50" />
+                <p className="text-sm">Empty</p>
               </div>
             ) : (
                <div className="divide-y divide-neutral-700/50">
-                {currentOrder.items.map((item) => {
-                  const product = products.find(p => p.id === item.id);
-                  const availableUnits = product?.uom.units.filter(u => u.isActive) || [];
-                  const itemTotal = (item.unitPrice || 0) * item.quantity;
-                  const isOnSale = product?.category === "Shot" && isHappyHour;
-                  
-                  return (
-                    <div key={item.id} className="grid grid-cols-12 gap-1 px-2 py-1.5 items-center text-xs">
-                      {/* Item Name */}
-                      <div className={`col-span-4 truncate ${isOnSale ? "text-amber-500 font-bold text-base" : "text-white"}`}>
-                        {item.name}
-                      </div>
-                      
-                      {/* Unit Selector */}
-                      <div className="col-span-2">
-                        <select 
-                          value={item.unit}
-                          onChange={(e) => changeUnit(item.id, e.target.value)}
-                          className="w-full bg-neutral-700 text-gray-300 text-[10px] px-1 py-0.5 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 cursor-pointer h-5"
-                        >
-                          {availableUnits.map(unit => (
-                            <option key={unit.abbreviation} value={unit.abbreviation}>
-                              {unit.abbreviation}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      {/* Unit Price */}
-                      <div className={`col-span-2 text-right ${isOnSale ? "text-amber-600 font-bold text-base" : "text-gray-400"}`}>
-                        Ksh {(item.unitPrice || 0).toFixed(0)}
-                      </div>
-                      
-                      {/* Quantity Controls */}
-                      <div className="col-span-2 flex items-center justify-center gap-0.5">
-                        <button onClick={() => updateQuantity(item.id, -1)} className="w-5 h-5 flex items-center justify-center bg-neutral-700 rounded text-white text-xs hover:bg-neutral-600"><Minus className="w-3 h-3" /></button>
-                        <span className="text-white text-xs w-4 text-center font-mono">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.id, 1)} className="w-5 h-5 flex items-center justify-center bg-neutral-700 rounded text-white text-xs hover:bg-neutral-600"><Plus className="w-3 h-3" /></button>
-                      </div>
-                      
-                      {/* Amount (line total) */}
-                      <div className={`col-span-1 text-right ${isOnSale ? "text-amber-600 font-bold text-base" : "text-amber-500 font-bold"}`}>
-                        Ksh {itemTotal.toFixed(0)}
-                      </div>
-                      
-                      {/* Delete button */}
-                      <div className="col-span-1 flex justify-end">
-                        <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-500 p-0.5"><X className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  );
-                })}
+                 {currentOrder.items.map((item) => {
+                   const product = products.find(p => p.id === item.id);
+                   const availableUnits = product?.uom.units.filter(u => u.isActive) || [];
+                   const itemTotal = (item.unitPrice || 0) * item.quantity;
+                   const isOnSale = product?.category === "Shot" && isHappyHour;
+                   
+                   return (
+                     <div key={item.id} className="grid grid-cols-12 gap-1 px-3 py-2 items-center text-sm font-bold">
+                       {/* Item Name */}
+                       <div className={`col-span-4 truncate ${isOnSale ? "text-amber-500 text-base" : "text-white"}`}>
+                         {item.name}
+                       </div>
+                       
+                       {/* Unit Selector */}
+                       <div className="col-span-2">
+                         <select 
+                           value={item.unit}
+                           onChange={(e) => changeUnit(item.id, e.target.value)}
+                           className="w-full bg-neutral-700 text-gray-300 text-xs px-1.5 py-1 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 cursor-pointer font-bold"
+                         >
+                           {availableUnits.map(unit => (
+                             <option key={unit.abbreviation} value={unit.abbreviation}>
+                               {unit.abbreviation}
+                             </option>
+                           ))}
+                         </select>
+                       </div>
+                       
+                       {/* Unit Price */}
+                       <div className={`col-span-2 text-right ${isOnSale ? "text-amber-600 text-base" : "text-gray-300"}`}>
+                         Ksh {(item.unitPrice || 0).toFixed(0)}
+                       </div>
+                       
+                       {/* Quantity Controls */}
+                       <div className="col-span-2 flex items-center justify-center gap-1">
+                         <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center bg-neutral-700 rounded text-white text-sm hover:bg-neutral-600"><Minus className="w-3.5 h-3.5" /></button>
+                         <span className="text-white text-sm w-5 text-center font-mono font-bold">{item.quantity}</span>
+                         <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center bg-neutral-700 rounded text-white text-sm hover:bg-neutral-600"><Plus className="w-3.5 h-3.5" /></button>
+                       </div>
+                       
+                       {/* Amount (line total) */}
+                       <div className={`col-span-1 text-right ${isOnSale ? "text-amber-600 text-base" : "text-amber-500"}`}>
+                         Ksh {itemTotal.toFixed(0)}
+                       </div>
+                       
+                       {/* Delete button */}
+                       <div className="col-span-1 flex justify-end">
+                         <button onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-500 p-0.5 font-bold"><X className="w-4 h-4" /></button>
+                       </div>
+                     </div>
+                   );
+                 })}
               </div>
             )}
           </div>
 
           {/* Compact Summary Footer */}
-          <div className="border-t border-neutral-700 px-2 py-1.5 space-y-1">
-            <div className="flex justify-between text-[10px] text-gray-400">
+          <div className="border-t border-neutral-700 px-3 py-2 space-y-1">
+            <div className="flex justify-between text-sm text-gray-400">
               <span>Subtotal</span><span>Ksh {(currentOrder.subtotal || 0).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-[10px] text-gray-400">
+            <div className="flex justify-between text-sm text-gray-400">
               <span>VAT 16%</span><span>Ksh {(currentOrder.tax || 0).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold text-white pt-1 border-t border-neutral-700">
+            <div className="flex justify-between text-lg font-bold text-white pt-1 border-t border-neutral-700">
               <span>Total</span><span>Ksh {(currentOrder.total || 0).toFixed(0)}</span>
             </div>
           </div>
 
           {/* Compact Action Buttons */}
-          <div className="px-2 py-1.5 border-t border-neutral-700">
-            <div className="flex gap-1 mb-1">
-              <button onClick={holdOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1 py-1 bg-neutral-700 text-white text-xs rounded hover:bg-neutral-600 disabled:opacity-50"><Pause className="w-3 h-3" /> Hold</button>
-              <button onClick={clearOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1 py-1 bg-red-500/20 text-red-500 text-xs rounded hover:bg-red-500/30 disabled:opacity-50"><Trash2 className="w-3 h-3" /> Clear</button>
+          <div className="px-3 py-2 border-t border-neutral-700">
+            <div className="flex gap-1.5 mb-1.5">
+              <button onClick={holdOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 disabled:opacity-50 disabled:hover:bg-green-500 transition-colors"><Pause className="w-3.5 h-3.5" /> Hold</button>
+              <button onClick={clearOrder} disabled={currentOrder.items.length === 0} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-red-500/20 text-red-500 text-sm rounded hover:bg-red-500/30 disabled:opacity-50"><Trash2 className="w-3.5 h-3.5" /> Clear</button>
             </div>
-            <button onClick={convertToBill} disabled={currentOrder.items.length === 0} className="w-full flex items-center justify-center gap-1.5 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 font-bold"><FileText className="w-4 h-4" /> Bill</button>
+            <button onClick={convertToBill} disabled={currentOrder.items.length === 0} className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-blue-500 text-white text-base rounded-lg hover:bg-blue-600 disabled:opacity-50 font-bold"><FileText className="w-4 h-4" /> Bill</button>
           </div>
         </div>
       </div>
@@ -674,21 +674,21 @@ const completeSale = () => {
             <button onClick={() => setShowCustomerSelect(false)}><X className="w-5 h-5 text-gray-400" /></button>
           </div>
           <div className="mb-4">
-            <input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500" />
+            <input type="text" placeholder="Search customers..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="w-full bg-neutral-700 text-white px-4 py-2.5 rounded-lg focus:outline-none focus:border-blue-500 text-sm" />
             <button onClick={() => setShowNewCustomer(!showNewCustomer)} className="w-full py-2 mt-2 text-blue-400 text-sm hover:text-blue-300">+ Create new customer</button>
           </div>
           {showNewCustomer && (
             <div className="mb-4">
-              <input type="text" placeholder="Name" value={newCustomer.name} onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-blue-500" />
-              <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2 rounded-lg mb-2 focus:outline-none focus:border-blue-500" />
+              <input type="text" placeholder="Name" value={newCustomer.name} onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2.5 rounded-lg mb-2 focus:outline-none focus:border-blue-500 text-sm" />
+              <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2.5 rounded-lg mb-2 focus:outline-none focus:border-blue-500 text-sm" />
               {customerError && <p className="text-red-500 text-sm mb-2">{customerError}</p>}
-              <button onClick={handleAddCustomer} className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Add Customer</button>
+              <button onClick={handleAddCustomer} className="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">Add Customer</button>
             </div>
           )}
           <div className="flex-1 overflow-y-auto max-h-64">
             {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map((customer) => (
-              <button key={customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2 hover:bg-neutral-700 rounded-lg mb-1">
-                <p className="text-white">{customer.name}</p>
+              <button key={customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2.5 hover:bg-neutral-700 rounded-lg mb-1">
+                <p className="text-white text-sm">{customer.name}</p>
                 <p className="text-gray-400 text-sm">{customer.phone}</p>
               </button>
             ))}
@@ -697,90 +697,90 @@ const completeSale = () => {
       </div>
     )}
 
-    {/* Held Orders Modal */}
-    {showHeldOrders && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">Held Orders</h2>
-            <button onClick={() => setShowHeldOrders(false)}><X className="w-5 h-5 text-gray-400" /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto max-h-64">
-            {heldOrders.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No held orders</p>
-            ) : (
-              heldOrders.map((order) => (
-                <div key={order.id} className="bg-neutral-700/50 p-3 rounded-lg mb-2">
-                  <p className="text-white font-medium">{order.customer.name}</p>
-                  <p className="text-gray-400 text-sm">{order.items.length} items</p>
-                  <p className="text-amber-500 font-bold">Ksh {order.total.toFixed(2)}</p>
-                  <button onClick={() => resumeOrder(order)} className="w-full mt-2 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Resume</button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    )}
+     {/* Held Orders Modal */}
+     {showHeldOrders && (
+       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+         <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+           <div className="flex items-center justify-between mb-4">
+             <h2 className="text-xl font-bold text-white">Held Orders</h2>
+             <button onClick={() => setShowHeldOrders(false)}><X className="w-5 h-5 text-gray-400" /></button>
+           </div>
+           <div className="flex-1 overflow-y-auto max-h-64">
+             {heldOrders.length === 0 ? (
+               <p className="text-center text-gray-500 py-8 text-sm">No held orders</p>
+             ) : (
+               heldOrders.map((order) => (
+                 <div key={order.id} className="bg-neutral-700/50 p-3 rounded-lg mb-2">
+                   <p className="text-white font-medium text-sm">{order.customer.name}</p>
+                   <p className="text-gray-400 text-sm">{order.items.length} items</p>
+                   <p className="text-amber-500 font-bold">Ksh {order.total.toFixed(2)}</p>
+                   <button onClick={() => resumeOrder(order)} className="w-full mt-2 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">Resume</button>
+                 </div>
+               ))
+             )}
+           </div>
+         </div>
+       </div>
+     )}
 
-    {/* Payment Modal */}
-    {billedOrder && showChangeInput && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">Payment</h2>
-            <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }}><X className="w-5 h-5 text-gray-400" /></button>
-          </div>
-          <div className="mb-4 text-center">
-            <p className="text-gray-400">Total Amount</p>
-            <p className="text-3xl font-bold text-white">Ksh {billedOrder.total.toFixed(2)}</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <button onClick={() => setPaymentMethod("cash")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "cash" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Banknote className="w-6 h-6" /><span className="text-sm">Cash</span></button>
-            <button onClick={() => setPaymentMethod("mpesa")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "mpesa" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Smartphone className="w-6 h-6" /><span className="text-sm">M-Pesa</span></button>
-            <button onClick={() => setPaymentMethod("account")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "account" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><CreditCard className="w-6 h-6" /><span className="text-sm">Account</span></button>
-          </div>
-          {paymentMethod !== "account" && (
-            <>
-              <div className="mb-4"><label className="text-gray-400 text-sm">Amount Received</label><input type="number" value={changeAmount} onChange={(e) => setChangeAmount(e.target.value)} placeholder="Ksh 0.00" className="w-full bg-neutral-700 text-white text-2xl text-center px-4 py-3 rounded-lg mt-1" autoFocus /></div>
-              {parseFloat(changeAmount) > billedOrder.total && <div className="mb-4 p-3 bg-green-500/20 rounded-lg text-center"><p className="text-gray-400 text-sm">Change</p><p className="text-2xl font-bold text-green-500">Ksh {getChange().toFixed(2)}</p></div>}
-              <div className="grid grid-cols-4 gap-2 mb-4">
-                {[100, 500, 1000, 2000].map((amt) => <button key={amt} onClick={() => setChangeAmount(String(amt))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600">+{amt}</button>)}
-                <button onClick={() => setChangeAmount(String(Math.ceil(billedOrder.total / 100) * 100))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 col-span-2">Exact</button>
-              </div>
-            </>
-          )}
-          <div className="flex gap-2">
-            <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg">Cancel</button>
-            {paymentMethod === "account" ? (
-              <button onClick={completeSale} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600"><CheckCircle className="w-5 h-5" /> Charge to Account</button>
-            ) : (
-              <button onClick={completeSale} disabled={parseFloat(changeAmount) < billedOrder.total} className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500 text-black rounded-lg font-bold hover:bg-green-600 disabled:opacity-50"><CheckCircle className="w-5 h-5" /> Complete</button>
-            )}
-          </div>
-        </div>
-      </div>
-    )}
+     {/* Payment Modal */}
+     {billedOrder && showChangeInput && (
+       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+         <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+           <div className="flex items-center justify-between mb-4">
+             <h2 className="text-xl font-bold text-white">Payment</h2>
+             <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }}><X className="w-5 h-5 text-gray-400" /></button>
+           </div>
+           <div className="mb-4 text-center">
+             <p className="text-gray-400 text-sm">Total Amount</p>
+             <p className="text-3xl font-bold text-white">Ksh {billedOrder.total.toFixed(2)}</p>
+           </div>
+           <div className="grid grid-cols-3 gap-2 mb-4">
+             <button onClick={() => setPaymentMethod("cash")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "cash" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Banknote className="w-6 h-6" /><span className="text-base">Cash</span></button>
+             <button onClick={() => setPaymentMethod("mpesa")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "mpesa" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><Smartphone className="w-6 h-6" /><span className="text-base">M-Pesa</span></button>
+             <button onClick={() => setPaymentMethod("account")} className={`flex flex-col items-center gap-1 py-3 rounded-lg ${paymentMethod === "account" ? "bg-blue-500 text-white" : "bg-neutral-700 text-gray-300"}`}><CreditCard className="w-6 h-6" /><span className="text-base">Account</span></button>
+           </div>
+           {paymentMethod !== "account" && (
+             <>
+               <div className="mb-4"><label className="text-gray-400 text-sm">Amount Received</label><input type="number" value={changeAmount} onChange={(e) => setChangeAmount(e.target.value)} placeholder="Ksh 0.00" className="w-full bg-neutral-700 text-white text-2xl text-center px-4 py-3 rounded-lg mt-1" autoFocus /></div>
+               {parseFloat(changeAmount) > billedOrder.total && <div className="mb-4 p-3 bg-green-500/20 rounded-lg text-center"><p className="text-gray-400 text-sm">Change</p><p className="text-2xl font-bold text-green-500">Ksh {getChange().toFixed(2)}</p></div>}
+               <div className="grid grid-cols-4 gap-2 mb-4">
+                 {[100, 500, 1000, 2000].map((amt) => <button key={amt} onClick={() => setChangeAmount(String(amt))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 text-sm">+{amt}</button>)}
+                 <button onClick={() => setChangeAmount(String(Math.ceil(billedOrder.total / 100) * 100))} className="py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 col-span-2 text-sm">Exact</button>
+               </div>
+             </>
+           )}
+           <div className="flex gap-2">
+             <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg text-sm">Cancel</button>
+             {paymentMethod === "account" ? (
+               <button onClick={completeSale} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 text-sm"><CheckCircle className="w-5 h-5" /> Charge to Account</button>
+             ) : (
+               <button onClick={completeSale} disabled={parseFloat(changeAmount) < billedOrder.total} className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-500 text-black rounded-lg font-bold hover:bg-green-600 disabled:opacity-50 text-sm"><CheckCircle className="w-5 h-5" /> Complete</button>
+             )}
+           </div>
+         </div>
+       </div>
+     )}
 
-    {/* Receipt Modal */}
-    {showReceipt && billedOrder && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
-          <div className="text-center mb-6"><CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" /><h2 className="text-2xl font-bold text-white">Payment Complete!</h2><p className="text-gray-400">Order {billedOrder.id}</p></div>
-          <div className="border-t border-b border-neutral-700 py-4 mb-4 space-y-2">
-            <div className="flex justify-between text-gray-400 text-sm"><span>Customer</span><span>{billedOrder.customer.name}</span></div>
-            <div className="flex justify-between text-gray-400 text-sm"><span>Items</span><span>{billedOrder.items.length}</span></div>
-            <div className="flex justify-between text-gray-400 text-sm"><span>Paid via</span><span className="capitalize">{paymentMethod === "account" ? "Account (Credit)" : paymentMethod}</span></div>
-          </div>
-          <div className="flex justify-between text-white text-2xl font-bold mb-6"><span>Total Paid</span><span>Ksh {billedOrder.total.toFixed(2)}</span></div>
-          <div className="text-center text-green-400 mb-4">+{Math.floor(billedOrder.total / 10)} points earned!</div>
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600"><Printer className="w-5 h-5" /> Print</button>
-             <button onClick={() => { setShowReceipt(false); setBilledOrder(null); setChangeAmount(""); }} className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">New Order</button>
-          </div>
-        </div>
-      </div>
-    )}
+     {/* Receipt Modal */}
+     {showReceipt && billedOrder && (
+       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+         <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+           <div className="text-center mb-6"><CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-2" /><h2 className="text-2xl font-bold text-white">Payment Complete!</h2><p className="text-gray-400 text-sm">Order {billedOrder.id}</p></div>
+           <div className="border-t border-b border-neutral-700 py-4 mb-4 space-y-2">
+             <div className="flex justify-between text-gray-400 text-sm"><span>Customer</span><span>{billedOrder.customer.name}</span></div>
+             <div className="flex justify-between text-gray-400 text-sm"><span>Items</span><span>{billedOrder.items.length}</span></div>
+             <div className="flex justify-between text-gray-400 text-sm"><span>Paid via</span><span className="capitalize">{paymentMethod === "account" ? "Account (Credit)" : paymentMethod}</span></div>
+           </div>
+           <div className="flex justify-between text-white text-2xl font-bold mb-6"><span>Total Paid</span><span>Ksh {billedOrder.total.toFixed(2)}</span></div>
+           <div className="text-center text-green-400 mb-4 text-sm">+{Math.floor(billedOrder.total / 10)} points earned!</div>
+           <div className="flex gap-2">
+             <button className="flex-1 flex items-center justify-center gap-2 py-3 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 text-sm"><Printer className="w-5 h-5" /> Print</button>
+              <button onClick={() => { setShowReceipt(false); setBilledOrder(null); setChangeAmount(""); }} className="flex-1 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 text-sm">New Order</button>
+           </div>
+         </div>
+       </div>
+     )}
   </div>
 );
 }

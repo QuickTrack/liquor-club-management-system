@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db/connection";
-import { Order } from "@/lib/db/models";
+import { Order, Product } from "@/lib/db/models";
+import { inventoryService } from "@/lib/services/inventoryService";
+import { AuditLogService } from "@/lib/services/auditLogService";
 
 /**
  * GET /api/orders
@@ -70,23 +73,86 @@ export async function POST(request: Request) {
     // Generate order ID
     const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
 
-    const order = await Order.create({
-      orderId,
-      customer,
-      items,
-      subtotal,
-      tax: tax || 0,
-      total,
-      paymentMethod: paymentMethod || "cash",
-      status: "paid",
-      pointsEarned,
-      paidAt: new Date(),
-    });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Populate customer info for response
-    await order.populate("customer", "name phone email");
+    try {
+      // Create the order
+      const order = await Order.create(
+        [
+          {
+            orderId,
+            customer,
+            items,
+            subtotal,
+            tax: tax || 0,
+            total,
+            paymentMethod: paymentMethod || "cash",
+            status: "paid",
+            pointsEarned,
+            paidAt: new Date(),
+          },
+        ],
+        { session }
+      );
 
-    return NextResponse.json(order, { status: 201 });
+      const createdOrder = order[0];
+
+      // Update inventory for each item in the order
+      if (items && items.length > 0) {
+        try {
+          const saleItems = items.map((item: any) => ({
+            productId: item.product,
+            quantity: item.quantity,
+            unit: item.unit || "bottles",
+            unitPrice: item.unitPrice || item.price,
+          }));
+
+          const userId = data.userId || "system";
+          const userName = data.userName || "System";
+
+          await inventoryService.processSale(saleItems, {
+            userId,
+            userName,
+            orderId,
+            actionType: "SALE",
+            notes: `Order ${orderId} processed`,
+          });
+        } catch (inventoryError) {
+          // If inventory update fails, rollback the entire transaction
+          await session.abortTransaction();
+          session.endSession();
+
+          console.error("Inventory update failed:", inventoryError);
+          return NextResponse.json(
+            {
+              error: "Failed to update inventory",
+              details: inventoryError instanceof Error ? inventoryError.message : "Unknown inventory error",
+            },
+            { status: 400 }
+          );
+        }
+      }
+
+      // Commit the transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      // Populate customer info for response
+      await createdOrder.populate("customer", "name phone email");
+
+      return NextResponse.json(createdOrder, { status: 201 });
+    } catch (error) {
+      // Abort transaction on error
+      await session.abortTransaction();
+      session.endSession();
+
+      console.error("Error creating order:", error);
+      return NextResponse.json(
+        { error: "Failed to create order", details: error instanceof Error ? error.message : "Unknown error" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error creating order:", error);
     return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
