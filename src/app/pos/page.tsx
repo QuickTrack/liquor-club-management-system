@@ -68,7 +68,7 @@ interface ProductWithUOM {
       isBase: boolean;
       conversionFactor: number;
       isActive: boolean;
-      sellPrice?: number;
+      sellPrice: number;
       costPrice?: number;
     }[];
   };
@@ -267,45 +267,40 @@ export default function POSPage() {
     return result;
   }, [products, searchTerm, activeCategory]);
 
-   const updatePricesWithCustomer = (customer: Customer) => {
-     const newItems = currentOrder.items.map((item) => {
-       const product = products.find((p) => p.id === item.id);
-       if (!product) return item;
-       
+    const updatePricesWithCustomer = (customer: Customer) => {
+      const newItems = currentOrder.items.map((item) => {
+        const product = products.find((p) => p.id === item.id);
+        if (!product) return item;
+
         // Find the currently selected unit (fallback to base unit)
-        const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit) 
-          || product.uom.units.find(u => u.isBase) 
+        const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit)
+          || product.uom.units.find(u => u.isBase)
           || product.uom.units[0];
-        
-        // Use stored unit sellPrice if available, otherwise compute from base price
-        const conversionFactor = selectedUnit.conversionFactor;
-        const baseUnitPrice = product.price;
-        const computedPrice = baseUnitPrice * conversionFactor;
-        const unitPrice = selectedUnit.sellPrice !== undefined && selectedUnit.sellPrice > 0 
-          ? selectedUnit.sellPrice 
-          : computedPrice;
-        
+
+        // Use the predefined fixed price from unit configuration (no computation)
+        const unitPrice = selectedUnit.sellPrice;
+
         // Apply happy hour if applicable (only for Shot category)
         let finalUnitPrice = unitPrice;
         if (isHappyHour && product.category === "Shot") {
           finalUnitPrice = unitPrice * 0.8;
         }
-       
-       return { 
-         ...item, 
-         basePrice: product.price,
-         unitPrice: finalUnitPrice,
-         conversionFactor,
-         unit: selectedUnit.abbreviation,
-       };
-     });
-     
-     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-     const netSubtotal = grossSubtotal / 1.16;
-     const tax = grossSubtotal - netSubtotal;
-     
-     setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
-   };
+
+        return {
+          ...item,
+          basePrice: product.price,
+          unitPrice: finalUnitPrice,
+          conversionFactor: selectedUnit.conversionFactor,
+          unit: selectedUnit.abbreviation,
+        };
+      });
+
+      const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const netSubtotal = grossSubtotal / 1.16;
+      const tax = grossSubtotal - netSubtotal;
+
+      setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
+    };
 
   const handleAddCustomer = async () => {
     if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
@@ -349,49 +344,38 @@ export default function POSPage() {
    const addToOrder = (product: ProductWithUOM) => {
       // Get the base unit (isBase: true) as default
       const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
-      const conversionFactor = baseUnit.conversionFactor;
-      const computedPrice = product.price * conversionFactor;
-      const unitPrice = baseUnit.sellPrice !== undefined && baseUnit.sellPrice > 0 
-        ? baseUnit.sellPrice 
-        : computedPrice;
-      
+
+      // Use predefined fixed price from unit configuration (no computation)
+      const unitPrice = baseUnit.sellPrice;
+
+      // Apply happy hour if applicable (shots only)
       let finalUnitPrice = unitPrice;
       if (isHappyHour && product.category === "Shot") finalUnitPrice = finalUnitPrice * 0.8;
 
-     const newItems = [...currentOrder.items];
-     const existing = newItems.find((item) => item.id === product.id);
-     let isNewItem = false;
-     
-     if (existing) existing.quantity += 1;
-     else {
-       newItems.push({ 
-         id: product.id,
-         name: product.name,
-         basePrice: product.price,
-         quantity: 1,
-         category: product.category,
-         unit: baseUnit.abbreviation,
-         conversionFactor,
-         unitPrice: finalUnitPrice,
-       });
-       isNewItem = true;
-     }
+      const newItems = [...currentOrder.items];
+      const existing = newItems.find((item) => item.id === product.id);
+      let isNewItem = false;
 
-     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-     const netSubtotal = grossSubtotal / 1.16;
-     const tax = grossSubtotal - netSubtotal;
+      if (existing) existing.quantity += 1;
+      else {
+        newItems.push({
+          id: product.id,
+          name: product.name,
+          basePrice: product.price,
+          quantity: 1,
+          category: product.category,
+          unit: baseUnit.abbreviation,
+          conversionFactor: baseUnit.conversionFactor,
+          unitPrice: finalUnitPrice,
+        });
+        isNewItem = true;
+      }
 
-     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
-     
-     // Clear search and close dropdown for any selection
-     setSearchTerm("");
-     setIsSearchOpen(false);
-     
-     // Focus quantity controls only for newly added items
-     if (isNewItem) {
-       focusedItemId.current = product.id;
-     }
-   };
+      const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const netSubtotal = grossSubtotal / 1.16;
+      const tax = grossSubtotal - netSubtotal;
+      setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+    };
 
    const updateQuantity = (id: string, delta: number) => {
      const newItems = currentOrder.items.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0);
@@ -401,44 +385,41 @@ export default function POSPage() {
      setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
    };
 
-   const changeUnit = (id: string, unitAbbreviation: string) => {
-     const newItems = currentOrder.items.map((item) => {
-       if (item.id !== id) return item;
-       
-       // Find the product to get base price and available units
-       const product = products.find(p => p.id === item.id);
-       if (!product) return item;
-       
+    const changeUnit = (id: string, unitAbbreviation: string) => {
+      const newItems = currentOrder.items.map((item) => {
+        if (item.id !== id) return item;
+
+        // Find the product to get base price and available units
+        const product = products.find(p => p.id === item.id);
+        if (!product) return item;
+
         // Find the selected unit
         const selectedUnit = product.uom.units.find(u => u.abbreviation === unitAbbreviation);
         if (!selectedUnit) return item;
-        
-        // Compute new unitPrice (prefer stored sellPrice, fallback to basePrice * conversionFactor)
+
+        // Use predefined fixed price from unit configuration (no computation)
         const newConversionFactor = selectedUnit.conversionFactor;
-        const computedPrice = product.price * newConversionFactor;
-        const newUnitPrice = selectedUnit.sellPrice !== undefined && selectedUnit.sellPrice > 0
-          ? selectedUnit.sellPrice
-          : computedPrice;
-        
+        const newUnitPrice = selectedUnit.sellPrice;
+
         // Apply happy hour discount if applicable (shots only)
         let finalUnitPrice = newUnitPrice;
         if (isHappyHour && product.category === "Shot") {
           finalUnitPrice = finalUnitPrice * 0.8;
         }
-       
-       return {
-         ...item,
-         unit: unitAbbreviation,
-         conversionFactor: newConversionFactor,
-         unitPrice: finalUnitPrice,
-       };
-     });
-     
-     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-     const netSubtotal = grossSubtotal / 1.16;
-     const tax = grossSubtotal - netSubtotal;
-     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
-   };
+
+        return {
+          ...item,
+          unit: unitAbbreviation,
+          conversionFactor: newConversionFactor,
+          unitPrice: finalUnitPrice,
+        };
+      });
+
+      const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const netSubtotal = grossSubtotal / 1.16;
+      const tax = grossSubtotal - netSubtotal;
+      setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+    };
 
    const removeItem = (id: string) => {
      const newItems = currentOrder.items.filter((item) => item.id !== id);

@@ -29,16 +29,18 @@ export async function GET() {
         uom: productUOM ? {
           baseUnit: productUOM.baseUnit,
           units: productUOM.units
-        } : {
-          baseUnit: product.unit,
-          units: [{
-            name: product.unit,
-            abbreviation: product.unit,
-            isBase: true,
-            conversionFactor: 1,
-            isActive: true
-          }]
-        }
+         } : {
+           baseUnit: product.unit,
+           units: [{
+             name: product.unit,
+             abbreviation: product.unit,
+             isBase: true,
+             conversionFactor: 1,
+             isActive: true,
+             sellPrice: product.sellPrice,
+             costPrice: product.costPrice,
+           }]
+         }
       };
     });
 

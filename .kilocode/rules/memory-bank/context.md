@@ -42,6 +42,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Product persistence**: AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format
 - [x] **Inventory data loading**: Inventory page now loads products from database on mount, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations
 - [x] **Alternate unit pricing**: Fixed data persistence for alternate unit sellPrice and costPrice; added fields to Unit schema; updated API to store and return these values; POS now uses stored unit prices for cart calculations, falling back to computed when not set
+- [x] **POS cart refactor**: Removed algorithmic price derivation; all unit selections now use predefined fixed sellPrice from product configuration; unit price computation simplified to direct lookup
 
 ## Current Structure
 

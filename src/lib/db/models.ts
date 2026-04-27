@@ -171,7 +171,7 @@ export interface IUnit {
   isBase: boolean;
   conversionFactor: number;
   isActive: boolean;
-  sellPrice?: number;
+  sellPrice: number;
   costPrice?: number;
 }
 
