@@ -48,8 +48,8 @@ const transformProduct = (p: any): Product => {
     .map((u: any) => ({
       unit: u.name,
       conversionFactor: u.conversionFactor,
-      sellPrice: 0,
-      costPrice: undefined,
+      sellPrice: u.sellPrice || 0,
+      costPrice: u.costPrice,
     })) || [];
 
   // Generate a numeric ID from the MongoDB ObjectId (last 6 hex chars)
@@ -104,8 +104,8 @@ export default function InventoryPage() {
     fetchProducts();
   }, []);
 
-   const handleAddProduct = async (newProduct: Omit<Product, "id" | "status"> ) => {
-       try {
+  const handleAddProduct = async (newProduct: Omit<Product, "id" | "status"> ) => {
+      try {
         const res = await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -126,6 +126,8 @@ export default function InventoryPage() {
                   isBase: true,
                   conversionFactor: 1,
                   isActive: true,
+                  sellPrice: newProduct.sellPrice,
+                  costPrice: newProduct.costPrice,
                 },
                 ...newProduct.alternateUnits.map((u) => ({
                   name: u.unit,
@@ -133,6 +135,8 @@ export default function InventoryPage() {
                   isBase: false,
                   conversionFactor: u.conversionFactor,
                   isActive: true,
+                  sellPrice: u.sellPrice,
+                  costPrice: u.costPrice,
                 })),
               ],
             },
@@ -574,6 +578,8 @@ export default function InventoryPage() {
                           isBase: true,
                           conversionFactor: 1,
                           isActive: true,
+                          sellPrice: updated.sellPrice,
+                          costPrice: updated.costPrice,
                         },
                         ...updated.alternateUnits.map((u) => ({
                           name: u.unit,
@@ -581,6 +587,8 @@ export default function InventoryPage() {
                           isBase: false,
                           conversionFactor: u.conversionFactor,
                           isActive: true,
+                          sellPrice: u.sellPrice,
+                          costPrice: u.costPrice,
                         })),
                       ],
                     },

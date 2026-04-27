@@ -171,6 +171,8 @@ export interface IUnit {
   isBase: boolean;
   conversionFactor: number;
   isActive: boolean;
+  sellPrice?: number;
+  costPrice?: number;
 }
 
 export interface IProductUOM extends Document {
@@ -185,6 +187,8 @@ const UnitSchema = new Schema<IUnit>({
   isBase: { type: Boolean, default: false },
   conversionFactor: { type: Number, required: true, min: 0.01 },
   isActive: { type: Boolean, default: true },
+  sellPrice: { type: Number, default: 0 },
+  costPrice: { type: Number },
 }, { _id: false });
 
 const ProductUOMSchema = new Schema<IProductUOM>({

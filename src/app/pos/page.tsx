@@ -68,6 +68,8 @@ interface ProductWithUOM {
       isBase: boolean;
       conversionFactor: number;
       isActive: boolean;
+      sellPrice?: number;
+      costPrice?: number;
     }[];
   };
 }
@@ -270,20 +272,24 @@ export default function POSPage() {
        const product = products.find((p) => p.id === item.id);
        if (!product) return item;
        
-       // Find the currently selected unit (fallback to base unit)
-       const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit) 
-         || product.uom.units.find(u => u.isBase) 
-         || product.uom.units[0];
-       
-       // Compute unitPrice from product's base price (sellPrice - VAT inclusive)
-       const conversionFactor = selectedUnit.conversionFactor;
-       const unitPrice = product.price * conversionFactor;
-       
-       // Apply happy hour if applicable
-       let finalUnitPrice = unitPrice;
-       if (isHappyHour && product.category === "Shot") {
-         finalUnitPrice = unitPrice * 0.8;
-       }
+        // Find the currently selected unit (fallback to base unit)
+        const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit) 
+          || product.uom.units.find(u => u.isBase) 
+          || product.uom.units[0];
+        
+        // Use stored unit sellPrice if available, otherwise compute from base price
+        const conversionFactor = selectedUnit.conversionFactor;
+        const baseUnitPrice = product.price;
+        const computedPrice = baseUnitPrice * conversionFactor;
+        const unitPrice = selectedUnit.sellPrice !== undefined && selectedUnit.sellPrice > 0 
+          ? selectedUnit.sellPrice 
+          : computedPrice;
+        
+        // Apply happy hour if applicable (only for Shot category)
+        let finalUnitPrice = unitPrice;
+        if (isHappyHour && product.category === "Shot") {
+          finalUnitPrice = unitPrice * 0.8;
+        }
        
        return { 
          ...item, 
@@ -341,13 +347,16 @@ export default function POSPage() {
   };
 
    const addToOrder = (product: ProductWithUOM) => {
-     // Get the base unit (isBase: true) as default
-     const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
-     const conversionFactor = baseUnit.conversionFactor;
-     const unitPrice = product.price * conversionFactor; // price displayed per selected unit (VAT inclusive)
-     
-     let finalUnitPrice = unitPrice;
-     if (isHappyHour && product.category === "Shot") finalUnitPrice = finalUnitPrice * 0.8;
+      // Get the base unit (isBase: true) as default
+      const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
+      const conversionFactor = baseUnit.conversionFactor;
+      const computedPrice = product.price * conversionFactor;
+      const unitPrice = baseUnit.sellPrice !== undefined && baseUnit.sellPrice > 0 
+        ? baseUnit.sellPrice 
+        : computedPrice;
+      
+      let finalUnitPrice = unitPrice;
+      if (isHappyHour && product.category === "Shot") finalUnitPrice = finalUnitPrice * 0.8;
 
      const newItems = [...currentOrder.items];
      const existing = newItems.find((item) => item.id === product.id);
@@ -400,19 +409,22 @@ export default function POSPage() {
        const product = products.find(p => p.id === item.id);
        if (!product) return item;
        
-       // Find the selected unit
-       const selectedUnit = product.uom.units.find(u => u.abbreviation === unitAbbreviation);
-       if (!selectedUnit) return item;
-       
-       // Compute new unitPrice directly from basePrice to avoid rounding errors
-       const newConversionFactor = selectedUnit.conversionFactor;
-       const newUnitPrice = product.price * newConversionFactor;
-       
-       // Apply happy hour discount if applicable (shots only)
-       let finalUnitPrice = newUnitPrice;
-       if (isHappyHour && product.category === "Shot") {
-         finalUnitPrice = finalUnitPrice * 0.8;
-       }
+        // Find the selected unit
+        const selectedUnit = product.uom.units.find(u => u.abbreviation === unitAbbreviation);
+        if (!selectedUnit) return item;
+        
+        // Compute new unitPrice (prefer stored sellPrice, fallback to basePrice * conversionFactor)
+        const newConversionFactor = selectedUnit.conversionFactor;
+        const computedPrice = product.price * newConversionFactor;
+        const newUnitPrice = selectedUnit.sellPrice !== undefined && selectedUnit.sellPrice > 0
+          ? selectedUnit.sellPrice
+          : computedPrice;
+        
+        // Apply happy hour discount if applicable (shots only)
+        let finalUnitPrice = newUnitPrice;
+        if (isHappyHour && product.category === "Shot") {
+          finalUnitPrice = finalUnitPrice * 0.8;
+        }
        
        return {
          ...item,

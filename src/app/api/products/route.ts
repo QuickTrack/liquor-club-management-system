@@ -107,6 +107,8 @@ export async function POST(request: Request) {
         isBase: u.isBase,
         conversionFactor: u.conversionFactor,
         isActive: u.isActive !== false,
+        sellPrice: u.sellPrice || 0,
+        costPrice: u.costPrice || undefined,
       })),
     });
 
@@ -198,6 +200,8 @@ export async function PATCH(request: Request) {
               isBase: u.isBase,
               conversionFactor: u.conversionFactor,
               isActive: u.isActive !== false,
+              sellPrice: u.sellPrice || 0,
+              costPrice: u.costPrice || undefined,
             })),
           },
         },
