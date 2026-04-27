@@ -8,6 +8,7 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 
 ## Recently Completed
 
+- [x] **Alternate unit persistence and robustness**: Ensured sellPrice/costPrice are always present for all units via API backfill; fixed edit crash for legacy units; added migration script for one-time DB fix; added unit tests for pricing logic
 - [x] **Dynamic categories in AddProductModal**: Category dropdown now fetches active categories from the database via `/api/categories`; new categories can be added inline via POST to API
 - [x] **Product grid removal**: Completely removed products grid from POS; interface now consists of header, customer selector, search dropdown, category filters, and order cart that fills remaining viewport
 - [x] **Cart table format**: Reordered cart item display into single-row table layout with columns: Item Name (col-span-4), Unit selector (col-span-2), Unit Price (col-span-2, right-aligned), Quantity controls (col-span-2, centered), Line Total Amount (col-span-1, right-aligned), and Delete button (col-span-1)
@@ -41,9 +42,9 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 - [x] **Fixed unit price calculation**: Prices now correctly calculated based on base product price and unit conversion factor, eliminating rounding errors when switching between units
 - [x] **Product persistence**: AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format
 - [x] **Inventory data loading**: Inventory page now loads products from database on mount, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations
-- [x] **Alternate unit pricing**: Fixed data persistence for alternate unit sellPrice and costPrice; added fields to Unit schema; updated API to store and return these values; POS now uses stored unit prices for cart calculations, falling back to computed when not set
-- [x] **POS cart refactor**: Removed algorithmic price derivation; all unit selections now use predefined fixed sellPrice from product configuration; unit price computation simplified to direct lookup
 - [x] **Alternate unit editing**: Added inline edit functionality for alternate units in AddProductModal; users can now modify unit name, conversion factor, sell price, and cost price after creation; includes validation and duplicate name checking
+- [x] **Alternate unit price backfill**: Fixed issue where legacy alternate units (created before sellPrice field existed) returned undefined prices in cart; GET /api/products now computes missing sellPrice from base product sellPrice * conversionFactor, ensuring all units have valid fixed prices in the shopping cart
+- [x] **Critical bug fix - Alternate unit persistence**: Resolved crash when editing units with missing sellPrice (startEditUnit now safely handles null/undefined); added ensureUnitPrices utility to backfill missing prices on read; created database migration script to permanently fix existing records
 
 ## Current Structure
 

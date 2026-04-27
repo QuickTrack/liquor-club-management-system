@@ -36,8 +36,9 @@
     ".next/dev/types/**/*.ts",
     "src/types/**/*.d.ts"
   ],
-"exclude": [
+  "exclude": [
     "node_modules",
-    "liquor-club-system"
+    "liquor-club-system",
+    "src/__tests__"
   ]
 }

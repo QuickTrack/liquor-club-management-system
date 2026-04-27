@@ -33,4 +33,12 @@ export async function connectDB() {
   return cached.conn;
 }
 
+export async function closeDB() {
+  if (cached.conn) {
+    await mongoose.disconnect();
+    cached.conn = null;
+    cached.promise = null;
+  }
+}
+
 export default mongoose;

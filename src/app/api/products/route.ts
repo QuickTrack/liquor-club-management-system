@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db/connection";
 import { Product, ProductUOM, IProductUOM } from "@/lib/db/models";
+import { ensureUnitPrices } from "@/lib/utils/uomPricing";
 import type { NextRequest } from "next/server";
 
 export async function GET() {
@@ -23,30 +24,13 @@ export async function GET() {
       const productUOM = uomMap.get(product._id.toString());
       const productObj = product.toObject();
 
-      // Helper to ensure unit has sellPrice/costPrice; compute from base product if missing
-      const ensureUnitPrices = (units: any[]) => {
-        return units.map(u => {
-          // Convert Mongoose subdocument to plain object
-          const unit = u.toObject ? u.toObject() : { ...u };
-          // Backfill missing sellPrice using base product price and conversion factor
-          if (unit.sellPrice === undefined || unit.sellPrice === null) {
-            unit.sellPrice = product.sellPrice * unit.conversionFactor;
-          }
-          // Backfill missing costPrice similarly (optional)
-          if (unit.costPrice === undefined || unit.costPrice === null) {
-            unit.costPrice = product.costPrice ? product.costPrice * unit.conversionFactor : undefined;
-          }
-          return unit;
-        });
-      };
-
       return {
         ...productObj,
         id: product._id.toString(), // Ensure id field is present as string
         price: product.sellPrice, // Alias sellPrice as price for frontend
         uom: productUOM ? {
           baseUnit: productUOM.baseUnit,
-          units: ensureUnitPrices(productUOM.units)
+          units: ensureUnitPrices(productUOM.units, product.sellPrice, product.costPrice)
         } : {
           baseUnit: product.unit,
           units: [{
@@ -73,6 +57,9 @@ export async function POST(request: Request) {
   try {
     await connectDB();
     const data = await request.json();
+
+    // DEBUG: Log incoming UOM units structure
+    console.log("[POST /api/products] UOM units:", JSON.stringify(data.uom?.units, null, 2));
 
     // Validate required fields
     if (!data.name || !data.category || data.costPrice === undefined || data.sellPrice === undefined) {
@@ -132,6 +119,10 @@ export async function POST(request: Request) {
       })),
     });
 
+    // DEBUG: Verify saved UOM
+    const savedUOM = await ProductUOM.findOne({ product: product._id });
+    console.log("[POST /api/products] Saved UOM units:", JSON.stringify(savedUOM?.units, null, 2));
+
     return NextResponse.json({
       ...product.toObject(),
       uom: data.uom
@@ -146,6 +137,9 @@ export async function PATCH(request: Request) {
   try {
     await connectDB();
     const data = await request.json();
+
+    // DEBUG: Log incoming UOM units structure
+    console.log("[PATCH /api/products] UOM units:", JSON.stringify(data.uom?.units, null, 2));
 
     // Validate required fields
     if (!data.id) {
@@ -228,6 +222,10 @@ export async function PATCH(request: Request) {
         { upsert: true, new: true }
       );
     }
+
+    // DEBUG: Verify updated UOM
+    const updatedUOM = await ProductUOM.findOne({ product: data.id });
+    console.log("[PATCH /api/products] Updated UOM units:", JSON.stringify(updatedUOM?.units, null, 2));
 
     // Fetch updated UOM
     const uom = await ProductUOM.findOne({ product: data.id });

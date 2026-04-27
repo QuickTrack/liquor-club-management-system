@@ -208,11 +208,15 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
 
   const startEditUnit = (index: number) => {
     const unit = form.alternateUnits[index];
+    if (!unit) {
+      console.error("[startEditUnit] No unit found at index", index, "alternateUnits length:", form.alternateUnits.length);
+      return;
+    }
     setEditUnitForm({
       unit: unit.unit,
-      conversionFactor: unit.conversionFactor.toString(),
-      sellPrice: unit.sellPrice.toString(),
-      costPrice: unit.costPrice?.toString() || "",
+      conversionFactor: unit.conversionFactor?.toString() ?? "",
+      sellPrice: unit.sellPrice != null ? String(unit.sellPrice) : "",
+      costPrice: unit.costPrice != null ? String(unit.costPrice) : "",
     });
     setEditingUnitIndex(index);
   };
