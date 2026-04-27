@@ -142,10 +142,8 @@ A complete Liquor Club Management System with 11 functional pages, MongoDB datab
 | 2026-04-27 | **Dynamic category fetching** - AddProductModal now fetches categories from `/api/categories` endpoint on mount; added loading state, disabled select during fetch, and inline category creation via POST request |
 | 2026-04-27 | **Product persistence** - AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches products after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format |
 | 2026-04-27 | **Inventory data loading** - Inventory page now loads products from database on mount using the products API, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations |
-| 2026-04-27 | **Product persistence** - AddProductModal now saves products to database via `/api/products` POST (create) and PATCH (update); inventory page refetches products after success; added PATCH/DELETE endpoints to products API; transformed API response to frontend format |
-| 2026-04-27 | **Inventory data loading** - Inventory page now loads products from database on mount using the products API, eliminating hardcoded data and ensuring proper MongoDB ObjectId handling for edit operations |
 | 2026-04-27 | **Fixed search bar** - Added useMemo for filtered products, improved search with trim() and empty term handling; added useMemo dependency on products, searchTerm, and activeCategory |
-| 2026-04-27 | **Inventory Management Service** - Created comprehensive inventory service with automatic stock updates on order completion, unit-aware UOM conversions, negative stock prevention, real-time audit logging, and reorder flagging; integrated into order API with Mongoose transactions |
+| 2026-04-27 | **Inventory Management Service** - Implemented comprehensive inventory service with automatic stock decrement on order completion, unit-aware UOM conversions, negative stock prevention, real-time audit logging, and reorder flagging; integrated into order API with Mongoose transactions; added auditLogService utility and inventory types |
 
 ## Quick Start Guide
 
