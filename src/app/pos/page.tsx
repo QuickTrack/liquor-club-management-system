@@ -558,18 +558,22 @@ export default function POSPage() {
         userId: user?._id,
         userName: user?.name,
       };
+      console.log("Holding order payload:", payload);
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const responseData = await response.json();
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to hold order");
+        console.error("Hold order validation failed:", responseData);
+        if (responseData.details) {
+          console.error("Validation details:", JSON.stringify(responseData.details, null, 2));
+        }
+        throw new Error(responseData.error || "Failed to hold order");
       }
-      const newOrder = await response.json();
       // Update held order with the saved order ID from DB
-      held.id = newOrder.orderId;
+      held.id = responseData.orderId;
     } catch (error) {
       console.error("Failed to save held order to database:", error);
       // Continue with local storage only

@@ -440,9 +440,15 @@ export class OrderRepository extends BaseRepository<IOrder> {
         const tax = subtotal * 0.16;
         const total = subtotal + tax;
 
+        // Map customerId to customer if present
+        const orderInput: any = { ...orderData };
+        if (orderInput.customerId) {
+          orderInput.customer = orderInput.customerId;
+        }
+
         // Create order
         const order = new Order({
-          ...orderData,
+          ...orderInput,
           orderId: `ORD-${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
           subtotal,
           tax,
@@ -497,9 +503,15 @@ export class OrderRepository extends BaseRepository<IOrder> {
         const tax = subtotal * 0.16;
         const total = subtotal + tax;
 
+        // Map customerId to customer if present
+        const orderInput: any = { ...orderData };
+        if (orderInput.customerId) {
+          orderInput.customer = orderInput.customerId;
+        }
+
         // Create order
         const order = new Order({
-          ...orderData,
+          ...orderInput,
           orderId: `ORD-${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
           subtotal,
           tax,
