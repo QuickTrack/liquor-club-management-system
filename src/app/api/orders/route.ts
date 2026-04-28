@@ -1,214 +1,297 @@
+/**
+ * Orders API - Enhanced with persistence layer and ACID transactions
+ */
+
 import { NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/db/connection";
-import { Order, Product } from "@/lib/db/models";
-import { inventoryService } from "@/lib/services/inventoryService";
-import { AuditLogService } from "@/lib/services/auditLogService";
+import { Order, Customer, Product } from "@/lib/db/models";
+import { TransactionManager } from "@/lib/services/transaction-manager";
+import { Validator, ValidationResult } from "@/lib/services/validation.service";
+import { Logger, logAudit } from "@/lib/services/logger.service";
+import { OrderRepository } from "@/lib/services/persistence-layer";
+
+// Initialize services
+const transactionManager = new TransactionManager();
+const orderRepository = new OrderRepository(transactionManager);
 
 /**
  * GET /api/orders
- * Fetch all orders with optional filters
- * Query params: ?status=paid&customerId=...&limit=20&offset=0
+ * Fetch orders with optional filters (status, customerId, assignedTo)
  */
 export async function GET(request: Request) {
   try {
     await connectDB();
     const { searchParams } = new URL(request.url);
-    
+
+    const filters: Record<string, any> = {};
     const status = searchParams.get("status");
     const customerId = searchParams.get("customerId");
     const assignedTo = searchParams.get("assignedTo");
-    const limit = parseInt(searchParams.get("limit") || "50");
+
+    if (status) filters.status = status;
+    if (customerId) filters.customer = customerId;
+    if (assignedTo) filters.assignedTo = assignedTo;
+
+    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    const filter: Record<string, any> = {};
-    if (status) filter.status = status;
-    if (customerId) filter.customer = customerId;
-    if (assignedTo) filter.assignedTo = assignedTo;
+    try {
+      const result = await orderRepository.findPaginated(filters, {
+        page: offset / limit + 1,
+        limit,
+        populate: ["customer", "assignedTo"],
+        sort: { createdAt: -1 },
+      });
 
-    const orders = await Order.find(filter)
-      .populate("customer", "name phone")
-      .populate("assignedTo", "name role")
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(offset);
-
-    const total = await Order.countDocuments(filter);
-
-    return NextResponse.json({
-      orders,
-      total,
-      limit,
-      offset,
+      return NextResponse.json({
+        orders: result.data,
+        total: result.total,
+        limit,
+        offset: result.page * limit,
+      });
+    } catch (dbError: any) {
+      Logger.datastore.error("Error fetching orders", {
+        filters,
+        error: dbError.message,
+      });
+      return NextResponse.json(
+        { error: "Failed to fetch orders", details: dbError.message },
+        { status: 500 }
+      );
+    }
+  } catch (error: any) {
+    Logger.error.error("Unexpected error in GET /api/orders", {
+      error: error.message,
+      stack: error.stack,
     });
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
 /**
  * POST /api/orders
- * Create a new order
+ * Create a new order with ACID-compliant inventory updates
  */
 export async function POST(request: Request) {
   try {
     await connectDB();
     const data = await request.json();
 
-    const {
-      customer,
-      items,
-      subtotal,
-      tax,
-      total,
-      paymentMethod,
-      pointsEarned = 0,
-      assignedTo,
-    } = data;
+    // Validate request body
+    const validation = Validator.validateOrderCreate(data);
+    if (!validation.isValid) {
+      Logger.transaction.warn("Order creation validation failed", {
+        errors: validation.errors,
+        payload: data,
+      });
 
-    if (!customer || !items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
-        { error: "Customer and items are required" },
+        {
+          error: "Validation failed",
+          details: validation.errors,
+        },
         { status: 400 }
       );
     }
 
-    // Generate order ID
-    const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
+    const orderData = validation.data!;
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // Extract user context from request headers (set by middleware)
+    const userId = data.userId || "system";
+    const userName = data.userName || "System";
 
     try {
-      // Create the order
-      const order = await Order.create(
-        [
-          {
-            orderId,
-            customer,
-            items,
-            subtotal,
-            tax: tax || 0,
-            total,
-            paymentMethod: paymentMethod || "cash",
-            status: "paid",
-            pointsEarned,
-            assignedTo: assignedTo ? new mongoose.Types.ObjectId(assignedTo) : undefined,
-            paidAt: new Date(),
-          },
-        ],
-        { session }
+      const result = await orderRepository.createWithInventory(
+        {
+          ...orderData,
+          paymentMethod: orderData.paymentMethod || "cash",
+          status: orderData.status,
+          ...(orderData.status === "paid" && { paidAt: new Date() }),
+        },
+        {
+          transactionId: "", // Will be generated
+          userId,
+          userName,
+          sessionId: data.sessionId,
+          metadata: { source: "pos", ip: data.ip },
+        }
       );
 
-      const createdOrder = order[0];
+      if (!result.success) {
+        // Log failure
+        Logger.transaction.error("Order creation failed after retries", {
+          transactionId: result.transactionId,
+          operation: result.operation,
+          error: result.error?.message,
+          attempts: result.retryAttempt,
+        });
 
-      // Update inventory for each item in the order
-      if (items && items.length > 0) {
-        try {
-          const saleItems = items.map((item: any) => ({
-            productId: item.product,
-            quantity: item.quantity,
-            unit: item.unit || "bottles",
-            unitPrice: item.unitPrice || item.price,
-          }));
-
-          const userId = data.userId || "system";
-          const userName = data.userName || "System";
-
-          await inventoryService.processSale(saleItems, {
-            userId,
-            userName,
-            orderId,
-            actionType: "SALE",
-            notes: `Order ${orderId} processed`,
-          });
-        } catch (inventoryError) {
-          // If inventory update fails, rollback the entire transaction
-          await session.abortTransaction();
-          session.endSession();
-
-          console.error("Inventory update failed:", inventoryError);
-          return NextResponse.json(
-            {
-              error: "Failed to update inventory",
-              details: inventoryError instanceof Error ? inventoryError.message : "Unknown inventory error",
-            },
-            { status: 400 }
-          );
-        }
+        return NextResponse.json(
+          {
+            error: result.error?.message || "Failed to create order",
+            code: result.error?.code,
+            transactionId: result.transactionId,
+          },
+          { status: 500 }
+        );
       }
 
-      // Commit the transaction
-      await session.commitTransaction();
-      session.endSession();
+      const createdOrder = result.data;
 
-      // Populate customer and assignedTo info for response
-      await createdOrder.populate("customer", "name phone email");
-      if (createdOrder.assignedTo) {
-        await createdOrder.populate("assignedTo", "name role");
+      if (!createdOrder) {
+        return NextResponse.json(
+          { error: "Failed to create order - no data returned" },
+          { status: 500 }
+        );
       }
+
+      // Audit log for successful order
+      logAudit("ORDER_CREATED", userId, {
+        orderId: createdOrder.orderId,
+        customer: orderData.customerId,
+        items: orderData.items.length,
+        total: createdOrder.total,
+        paymentMethod: orderData.paymentMethod,
+      });
+
+      Logger.transaction.info("Order created successfully", {
+        orderId: createdOrder.orderId,
+        transactionId: result.transactionId,
+        userId,
+        total: createdOrder.total,
+        durationMs: result.durationMs,
+      });
 
       return NextResponse.json(createdOrder, { status: 201 });
-    } catch (error) {
-      // Abort transaction on error
-      await session.abortTransaction();
-      session.endSession();
+    } catch (innerError: any) {
+      Logger.error.error("Error in order creation transaction", {
+        error: innerError.message,
+        stack: innerError.stack,
+      });
 
-      console.error("Error creating order:", error);
       return NextResponse.json(
-        { error: "Failed to create order", details: error instanceof Error ? error.message : "Unknown error" },
+        { error: "Failed to create order", details: innerError.message },
         { status: 500 }
       );
     }
-  } catch (error) {
-    console.error("Error creating order:", error);
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
+  } catch (error: any) {
+    Logger.error.error("Unexpected error in POST /api/orders", {
+      error: error.message,
+      stack: error.stack,
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
 /**
  * PATCH /api/orders/[id]
- * Update an existing order (for handover and status changes)
+ * Update order status or assignment
  */
 export async function PATCH(request: Request) {
   try {
     await connectDB();
-    const { id } = await request.json();
-    const updates = await request.json();
+    const body = await request.json();
+    const { id } = body;
+    const updates = { ...body };
+    delete updates.id;
 
     if (!id) {
-      return NextResponse.json({ error: "Order ID is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Order ID is required" },
+        { status: 400 }
+      );
     }
 
-    const order = await Order.findById(id);
-    if (!order) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    // Validate update payload
+    const allowedUpdates = ["status", "assignedTo", "paymentMethod", "paidAt"];
+    const updateKeys = Object.keys(updates);
+
+    const invalidKeys = updateKeys.filter((k) => !allowedUpdates.includes(k));
+    if (invalidKeys.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid update fields: ${invalidKeys.join(", ")}` },
+        { status: 400 }
+      );
     }
 
-    // Build update object
-    const updateFields: any = {};
-    if (updates.status) updateFields.status = updates.status;
-    if (updates.assignedTo) {
-      updateFields.assignedTo = new mongoose.Types.ObjectId(updates.assignedTo);
-    }
-    if (updates.paymentMethod) updateFields.paymentMethod = updates.paymentMethod;
-    if (updates.paidAt !== undefined) updateFields.paidAt = updates.paidAt;
-
-    // If status changed to paid and paidAt not set, set it
-    if (updates.status === "paid" && !updateFields.paidAt) {
-      updateFields.paidAt = new Date();
+    // Validate status if provided
+    if (updates.status && !["draft", "held", "billed", "paid", "cancelled"].includes(updates.status)) {
+      return NextResponse.json(
+        { error: "Invalid status value" },
+        { status: 400 }
+      );
     }
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      id,
-      { $set: updateFields },
-      { new: true }
-    ).populate("customer", "name phone email").populate("assignedTo", "name role");
+    const userId = updates.userId || "system";
 
-    return NextResponse.json(updatedOrder);
+    try {
+      const updateQuery: any = { $set: {} };
+      if (updates.status) updateQuery.$set.status = updates.status;
+      if (updates.assignedTo) {
+        updateQuery.$set.assignedTo = new mongoose.Types.ObjectId(updates.assignedTo);
+      }
+      if (updates.paymentMethod) {
+        updateQuery.$set.paymentMethod = updates.paymentMethod;
+      }
+      if (updates.paidAt !== undefined) {
+        updateQuery.$set.paidAt = updates.paidAt;
+      }
+
+      // Auto-set paidAt when status changes to paid
+      if (updates.status === "paid" && !updateQuery.$set.paidAt) {
+        updateQuery.$set.paidAt = new Date();
+      }
+
+      const updatedOrder = await Order.findByIdAndUpdate(
+        id,
+        updateQuery,
+        { new: true }
+      )
+        .populate("customer", "name phone email")
+        .populate("assignedTo", "name role");
+
+      if (!updatedOrder) {
+        return NextResponse.json(
+          { error: "Order not found" },
+          { status: 404 }
+        );
+      }
+
+      // Audit log
+      logAudit("ORDER_UPDATED", userId, {
+        orderId: updatedOrder.orderId,
+        changes: updateKeys,
+        newStatus: updates.status,
+      });
+
+      return NextResponse.json(updatedOrder);
+    } catch (dbError: any) {
+      Logger.datastore.error("Error updating order", {
+        orderId: id,
+        updates,
+        error: dbError.message,
+      });
+
+      return NextResponse.json(
+        { error: "Failed to update order", details: dbError.message },
+        { status: 500 }
+      );
+    }
   } catch (error: any) {
-    console.error("Error updating order:", error);
-    return NextResponse.json({ error: error.message || "Failed to update order" }, { status: 500 });
+    Logger.error.error("Unexpected error in PATCH /api/orders", {
+      error: error.message,
+      stack: error.stack,
+    });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

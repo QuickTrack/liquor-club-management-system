@@ -24,6 +24,7 @@ import {
   SwitchCamera,
   ArrowRightLeft,
 } from "lucide-react";
+import EndOfShiftWizard from "@/components/EndOfShiftWizard";
 
 interface CartItem {
   id: string;
@@ -55,7 +56,8 @@ interface Order {
 }
 
 interface Customer {
-  id: number;
+  _id?: string;
+  id?: number | string;
   name: string;
   phone: string;
   tier: "Bronze" | "Silver" | "Gold" | "VIP";
@@ -175,7 +177,8 @@ export default function POSPage() {
   // Staff assignment states
   const [currentStaff, setCurrentStaff] = useState<StaffMember | null>(null);
   const [showSwitchUserModal, setShowSwitchUserModal] = useState(false);
-  const [showHandoverModal, setShowHandoverModal] = useState(false);
+   const [showHandoverModal, setShowHandoverModal] = useState(false);
+   const [showEndOfShiftWizard, setShowEndOfShiftWizard] = useState(false);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
    const [handoverFrom, setHandoverFrom] = useState<StaffMember | null>(null);
@@ -189,26 +192,44 @@ export default function POSPage() {
       return cleanName + staffCode + "-" + timestamp.substring(timestamp.length - 4);
     }, [currentStaff]);
 
-   // Load held orders from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedHeldOrders = localStorage.getItem("pos_held_orders");
-      if (savedHeldOrders) {
-        setHeldOrders(JSON.parse(savedHeldOrders));
+    // Load held orders from localStorage on mount
+    useEffect(() => {
+      try {
+        const savedHeldOrders = localStorage.getItem("pos_held_orders");
+        if (savedHeldOrders) {
+          setHeldOrders(JSON.parse(savedHeldOrders));
+        }
+      } catch (e) {
+        console.error("Failed to load held orders from localStorage:", e);
       }
-    } catch (e) {
-      console.error("Failed to load held orders from localStorage:", e);
-    }
-  }, []);
+    }, []);
 
-  // Save held orders to localStorage on change
-  useEffect(() => {
-    try {
-      localStorage.setItem("pos_held_orders", JSON.stringify(heldOrders));
-    } catch (e) {
-      console.error("Failed to save held orders to localStorage:", e);
-    }
-  }, [heldOrders]);
+    // Save held orders to localStorage on change
+    useEffect(() => {
+      try {
+        localStorage.setItem("pos_held_orders", JSON.stringify(heldOrders));
+      } catch (e) {
+        console.error("Failed to save held orders to localStorage:", e);
+      }
+    }, [heldOrders]);
+
+    // Load held orders from database when staff changes
+    useEffect(() => {
+      if (!currentStaff) return;
+      const loadHeldOrdersFromDB = async () => {
+        try {
+          const response = await fetch(`/api/orders?status=held&assignedTo=${currentStaff._id}`);
+          if (response.ok) {
+            const data = await response.json();
+            // Replace heldOrders with database state (overwrites localStorage)
+            setHeldOrders(data.orders || []);
+          }
+        } catch (error) {
+          console.error("Failed to load held orders from database:", error);
+        }
+      };
+      loadHeldOrdersFromDB();
+    }, [currentStaff]);
 
     useEffect(() => {
       const initializeData = async () => {
@@ -510,7 +531,7 @@ export default function POSPage() {
     setCurrentOrder({ id: getOrderId(currentOrder.customer.name), customer: currentOrder.customer, items: [], subtotal: 0, tierDiscount: 0, tax: 0, total: 0, status: "draft", createdAt: new Date().toISOString() });
   };
 
-  const holdOrder = () => {
+  const holdOrder = async () => {
     if (currentOrder.items.length === 0) return;
     const held: Order = { 
       ...currentOrder, 
@@ -518,14 +539,64 @@ export default function POSPage() {
       heldAt: new Date().toISOString(),
       assignedTo: currentStaff ? { _id: currentStaff._id, name: currentStaff.name, role: currentStaff.role } : undefined,
     };
+    try {
+      const payload = {
+        customerId: currentOrder.customer._id || currentOrder.customer.id || null,
+        items: currentOrder.items.map(item => ({
+          productId: item.id,
+          name: item.name,
+          price: item.basePrice,
+          quantity: item.quantity,
+          category: item.category,
+          unit: item.unit,
+          conversionFactor: item.conversionFactor,
+          unitPrice: item.unitPrice,
+        })),
+        paymentMethod: "cash",
+        status: "held",
+        assignedTo: currentStaff?._id || null,
+        userId: user?._id,
+        userName: user?.name,
+      };
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to hold order");
+      }
+      const newOrder = await response.json();
+      // Update held order with the saved order ID from DB
+      held.id = newOrder.orderId;
+    } catch (error) {
+      console.error("Failed to save held order to database:", error);
+      // Continue with local storage only
+    }
     setHeldOrders([held, ...heldOrders]);
     clearOrder();
   };
 
-  const resumeOrder = (order: Order) => {
+  const resumeOrder = async (order: Order) => {
     setCurrentOrder({ ...order, status: "draft", createdAt: new Date().toISOString() });
     setHeldOrders(heldOrders.filter((o) => o.id !== order.id));
     setShowHeldOrders(false);
+    if (!order.id) return;
+    try {
+      const response = await fetch("/api/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: order.id, status: "draft" }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("Failed to update order status:", error);
+        // Not critical, continue
+      }
+    } catch (error) {
+      console.error("Failed to update order status in DB:", error);
+    }
   };
 
   const convertToBill = () => {
@@ -573,7 +644,7 @@ const completeSale = () => {
     try {
       const ordersToTransfer = selectedOrderIds.length > 0
         ? selectedOrderIds
-        : heldOrders.filter(o => o.customer.id !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o.id).filter(Boolean);
+          : heldOrders.filter(o => (o.customer._id || o.customer.id) !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o.id).filter(Boolean);
 
       if (ordersToTransfer.length === 0) {
         alert("No orders to transfer");
@@ -663,9 +734,19 @@ const completeSale = () => {
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Handover</span>
-              </button>
-              
-              <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-1 px-2 py-1.5 bg-neutral-700 text-white text-sm rounded hover:bg-neutral-600">
+               </button>
+               
+               <button
+                 onClick={() => setShowEndOfShiftWizard(true)}
+                 disabled={!currentStaff}
+                 title="End of Shift"
+                 className="flex items-center gap-1 px-2 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 <FileText className="w-3.5 h-3.5" />
+                 <span className="hidden sm:inline">End Shift</span>
+               </button>
+               
+               <button onClick={() => setShowHeldOrders(true)} className="flex items-center gap-1 px-2 py-1.5 bg-neutral-700 text-white text-sm rounded hover:bg-neutral-600">
                 <Pause className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{heldOrders.length}</span>
               </button>
               
@@ -722,7 +803,8 @@ const completeSale = () => {
                              <p className="text-amber-500 text-sm font-bold">Ksh {(product.price || 0).toFixed(2)}</p>
                              <p className="text-gray-500 text-xs">Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
                            </div>
-                         </button>
+               </button>
+
                        );
                      })}
                    </div>
@@ -786,11 +868,11 @@ const completeSale = () => {
                            onChange={(e) => changeUnit(item.id, e.target.value)}
                            className="w-full bg-neutral-700 text-gray-300 text-xs px-1.5 py-1 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 cursor-pointer font-bold"
                          >
-                           {availableUnits.map(unit => (
-                             <option key={unit.abbreviation} value={unit.abbreviation}>
-                               {unit.abbreviation}
-                             </option>
-                           ))}
+                            {availableUnits.map((unit, idx) => (
+                              <option key={unit.abbreviation || idx} value={unit.abbreviation}>
+                                {unit.abbreviation}
+                              </option>
+                            ))}
                          </select>
                        </div>
                        
@@ -867,7 +949,7 @@ const completeSale = () => {
           )}
           <div className="flex-1 overflow-y-auto max-h-64">
             {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map((customer) => (
-              <button key={customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2.5 hover:bg-neutral-700 rounded-lg mb-1">
+              <button key={customer._id || customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2.5 hover:bg-neutral-700 rounded-lg mb-1">
                 <p className="text-white text-sm">{customer.name}</p>
                 <p className="text-gray-400 text-sm">{customer.phone}</p>
               </button>
@@ -913,7 +995,8 @@ const completeSale = () => {
                             className="p-1 text-green-400 hover:text-green-300"
                           >
                             <ArrowRightLeft className="w-4 h-4" />
-                          </button>
+               </button>
+
                         )}
                       </div>
                       <button 
@@ -1055,13 +1138,13 @@ const completeSale = () => {
             <div className="mb-4">
               <p className="text-gray-400 text-sm mb-2">Select orders to transfer:</p>
               <div className="max-h-60 overflow-y-auto space-y-2">
-                {heldOrders
-                  .filter(o => 
-                    o.assignedTo && 
-                    o.assignedTo._id === handoverFrom._id && 
-                    o.customer.id !== undefined && 
-                    o.items.length > 0
-                  )
+                  {heldOrders
+                    .filter(o => 
+                      o.assignedTo && 
+                      o.assignedTo._id === handoverFrom._id && 
+                      (o.customer._id || o.customer.id) !== undefined && 
+                      o.items.length > 0
+                    )
                   .map((order) => (
                     <label
                       key={order.id}
@@ -1071,18 +1154,18 @@ const completeSale = () => {
                           : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedOrderIds.includes(order.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedOrderIds([...selectedOrderIds, order.id]);
-                          } else {
-                            setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-gray-300"
-                      />
+                       <input
+                         type="checkbox"
+                         checked={selectedOrderIds.includes(order.id)}
+                         onChange={(e) =>
+                           setSelectedOrderIds(
+                             e.target.checked
+                               ? [...selectedOrderIds, order.id]
+                               : selectedOrderIds.filter(id => id !== order.id)
+                           )
+                         }
+                         className="w-4 h-4 rounded border-gray-300"
+                       />
                       <div className="flex-1">
                         <p className="text-white text-sm font-medium">
                           {order.customer.name} - {order.items.length} items
@@ -1096,7 +1179,7 @@ const completeSale = () => {
                   {heldOrders.filter(o => 
                     o.assignedTo && 
                     o.assignedTo._id === handoverFrom._id && 
-                    o.customer.id !== undefined && 
+                    (o.customer._id || o.customer.id) !== undefined && 
                     o.items.length > 0
                   ).length === 0 && (
                     <p className="text-center text-gray-500 py-4">No held orders to transfer from {handoverFrom.name}</p>
@@ -1136,13 +1219,13 @@ const completeSale = () => {
             {/* Quick Transfer All Button */}
             <button
               onClick={() => {
-                const allOrderIds = heldOrders
-                  .filter(o => 
-                    o.assignedTo && 
-                    o.assignedTo._id === handoverFrom._id && 
-                    o.customer.id !== undefined && 
-                    o.items.length > 0
-                  )
+                 const allOrderIds = heldOrders
+                   .filter(o => 
+                     o.assignedTo && 
+                     o.assignedTo._id === handoverFrom._id && 
+                     (o.customer._id || o.customer.id) !== undefined && 
+                     o.items.length > 0
+                   )
                   .map(o => o.id)
                   .filter(Boolean) as string[];
                 setSelectedOrderIds(allOrderIds);
@@ -1162,6 +1245,18 @@ const completeSale = () => {
           </div>
         </div>
       )}
-   </div>
- );
+       {showEndOfShiftWizard && (
+         <EndOfShiftWizard
+           isOpen={showEndOfShiftWizard}
+           onClose={() => setShowEndOfShiftWizard(false)}
+           currentStaff={currentStaff!}
+           staffList={staffList}
+           onShiftClosed={() => {
+             // Refresh page or fetch new data after shift close
+             window.location.reload();
+           }}
+         />
+       )}
+    </div>
+  );
 }
