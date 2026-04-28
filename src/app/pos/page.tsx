@@ -540,6 +540,10 @@ export default function POSPage() {
       assignedTo: currentStaff ? { _id: currentStaff._id, name: currentStaff.name, role: currentStaff.role } : undefined,
     };
     try {
+      console.log("Current order items:", currentOrder.items);
+      currentOrder.items.forEach((item, index) => {
+        console.log(`Item ${index}: id=${item.id}, basePrice=${item.basePrice}`);
+      });
       const payload = {
         customerId: currentOrder.customer._id || currentOrder.customer.id || null,
         items: currentOrder.items.map(item => ({
@@ -564,7 +568,14 @@ export default function POSPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const responseData = await response.json();
+      const responseText = await response.text();
+      console.log("Response status:", response.status, "text:", responseText);
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { error: responseText };
+      }
       if (!response.ok) {
         console.error("Hold order validation failed:", responseData);
         if (responseData.details) {
