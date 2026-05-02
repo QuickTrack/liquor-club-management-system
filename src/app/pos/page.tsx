@@ -1306,25 +1306,7 @@ export default function POSPage() {
                   )
 .map((order) => (
                       <div key={order._id || order.id} className="flex items-center gap-2">
-                        <label
-                          className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-                            selectedOrderIds.includes(order._id || order.id)
-                              ? "bg-blue-500/20 border-blue-500"
-                              : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedOrderIds.includes(order._id || order.id)}
-                            onChange={(e) =>
-                              setSelectedOrderIds(
-                                e.target.checked
-                                  ? [...selectedOrderIds, order._id || order.id]
-                                  : selectedOrderIds.filter(id => id !== (order._id || order.id))
-                              )
-                            }
-                            className="w-4 h-4 rounded border-gray-300"
-                          />
+                        <div className="flex-1 flex items-center gap-3 p-3 rounded-lg border bg-neutral-700 border-neutral-600">
                           <div className="flex-1">
                             <p className="text-white text-sm font-medium">
                               {order.customer.name} - {order.items.length} items
@@ -1333,7 +1315,7 @@ export default function POSPage() {
                               Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
                             </p>
                           </div>
-                        </label>
+                        </div>
                         <button
                           onClick={() => resumeOrder(order)}
                           disabled={currentOrder.items.length > 0}
