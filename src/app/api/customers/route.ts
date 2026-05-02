@@ -18,9 +18,12 @@ export async function POST(request: Request) {
     await connectDB();
     const data = await request.json();
     
+    console.log("Creating customer with data:", { name: data.name, phone: data.phone, email: data.email, tier: data.tier });
+    
     // Check if customer with this phone already exists
     const existingCustomer = await Customer.findOne({ phone: data.phone });
     if (existingCustomer) {
+      console.log("Duplicate phone attempt:", data.phone);
       return NextResponse.json({ error: "Customer with this phone number already exists" }, { status: 400 });
     }
     
@@ -39,9 +42,23 @@ export async function POST(request: Request) {
       status: "Active",
     });
     
+    console.log("Customer created successfully:", customer._id);
+    
+    // Return the created customer with _id
     return NextResponse.json(customer, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error creating customer:", error);
-    return NextResponse.json({ error: "Failed to create customer" }, { status: 500 });
+    
+    // Handle Mongoose duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json({ error: "A customer with this phone number already exists" }, { status: 400 });
+    }
+    
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    
+    return NextResponse.json({ error: "Failed to create customer. Please try again." }, { status: 500 });
   }
 }

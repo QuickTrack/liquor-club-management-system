@@ -37,13 +37,13 @@ export async function POST(request: Request) {
 
     // Build filter for orders to transfer
     const filter: any = {
-      assignedTo: fromStaffId,
+      assignedTo: new mongoose.Types.ObjectId(fromStaffId),
       status: { $in: ["draft", "held"] },
     };
 
-     if (orderIds && orderIds.length > 0) {
-       filter._id = { $in: orderIds.map((id: string) => new mongoose.Types.ObjectId(id)) };
-     }
+    if (orderIds && orderIds.length > 0) {
+      filter.orderId = { $in: orderIds };
+    }
 
     // Update all matching orders
     const result = await Order.updateMany(

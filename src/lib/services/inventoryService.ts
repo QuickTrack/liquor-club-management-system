@@ -6,6 +6,7 @@
 import mongoose from "mongoose";
 import { Product, ProductUOM, AuditLog } from "@/lib/db/models";
 import { AuditLogService } from "./auditLogService";
+import { Logger, logAudit } from "./logger.service";
 import {
   StockUpdateItem,
   StockUpdateResult,
@@ -203,9 +204,18 @@ export class InventoryService {
       resolved: false,
     };
 
-    // In a real system, this would save to a ReorderAlert collection
-    // For now, we'll log it and it can be tracked via audit logs
-    console.log(`REORDER ALERT: ${product.name} (Stock: ${product.stock}, Reorder Level: ${product.reorderLevel})`);
+    // Log reorder alert with structured logger
+    Logger.datastore.warn("Reorder alert triggered", {
+      productId: product._id.toString(),
+      productName: product.name,
+      currentStock: product.stock,
+      reorderLevel: product.reorderLevel,
+      unit: product.unit,
+      alertType: alert.alertType,
+    });
+
+    // TODO: Persist alert to dedicated collection in future
+    // await ReorderAlert.create([alert], { session });
 
     return alert;
   }
@@ -248,6 +258,7 @@ export class InventoryService {
           : await Product.findById(item.productId);
 
         if (!product) {
+          Logger.datastore.error("Product not found for stock update", { productId: item.productId });
           throw new ProductNotFoundError(item.productId);
         }
 
@@ -256,6 +267,12 @@ export class InventoryService {
 
         const shouldAllowNegative = options?.allowNegativeStock ?? this.options.allowNegativeStock;
         if (!shouldAllowNegative && newStock < 0) {
+          Logger.datastore.warn("Insufficient stock for sale", {
+            productId: product._id.toString(),
+            productName: product.name,
+            available: product.stock,
+            requested: baseUnitQuantity,
+          });
           throw new InsufficientStockError(product.name, product.stock, Math.abs(baseUnitQuantity));
         }
 
@@ -310,22 +327,30 @@ export class InventoryService {
       }
 
       return results;
-    } catch (error) {
-      if (useTransactions && session) {
-        await session.abortTransaction();
-        session.endSession();
-      } else {
-        // Manual rollback: restore previous stock levels
-        for (const prev of previousStocks) {
-          await Product.findByIdAndUpdate(prev.productId, { stock: prev.stock });
+      } catch (error) {
+        if (useTransactions && session) {
+          await session.abortTransaction();
+          session.endSession();
+          Logger.datastore.error("Transaction aborted due to inventory update failure", {
+            error: (error as Error).message,
+            itemsCount: items.length,
+          });
+        } else {
+          // Manual rollback: restore previous stock levels
+          for (const prev of previousStocks) {
+            await Product.findByIdAndUpdate(prev.productId, { stock: prev.stock });
+          }
+          // Clean up audit logs for this transaction
+          if (context.orderId) {
+            await AuditLog.deleteMany({ "details.orderId": context.orderId });
+          }
+          Logger.datastore.warn("Manual rollback performed (non-transactional mode)", {
+            previousStocksCount: previousStocks.length,
+            orderId: context.orderId,
+          });
         }
-        // Clean up audit logs for this transaction
-        if (context.orderId) {
-          await AuditLog.deleteMany({ "details.orderId": context.orderId });
-        }
+        throw error;
       }
-      throw error;
-    }
   }
 
   /**

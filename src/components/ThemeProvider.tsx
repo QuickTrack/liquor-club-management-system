@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useState } from "react";
 
 type Theme = "dark" | "bright";
 
@@ -12,18 +12,20 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [loaded, setLoaded] = useState(false);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") {
+      return "dark";
+    }
+    const stored = localStorage.getItem("theme");
+    return (stored === "dark" || stored === "bright") ? stored : "dark";
+  });
+  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const initial = stored || "dark";
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(initial);
-    document.documentElement.setAttribute("data-theme", initial);
-     
-    setLoaded(true);
-  }, []);
+    setMounted(true);
+  }, [theme]);
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "bright" : "dark";
@@ -32,7 +34,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute("data-theme", newTheme);
   };
 
-  if (!loaded) {
+  // Avoid rendering children until mounted to prevent hydration mismatch
+  // This ensures localStorage-dependent state is sync'd before first paint
+  if (!mounted) {
     return (
       <ThemeContext.Provider value={{ theme: "dark", toggleTheme }}>
         {children}

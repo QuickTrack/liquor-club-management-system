@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthContext";
+import { ShiftProvider } from "@/components/ShiftContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,9 +32,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider>
-          <AuthProvider>
-            <div 
+         <ThemeProvider>
+           <AuthProvider>
+             <ShiftProvider>
+               <div
               className="min-h-screen transition-colors duration-300 relative"
               style={{ backgroundColor: "rgb(var(--background))" }}
             >
@@ -42,11 +44,12 @@ export default function RootLayout({
                 className="flex-1 p-6 overflow-y-auto transition-colors duration-300"
                 style={{ backgroundColor: "rgb(var(--background))" }}
               >
-                {children}
-              </main>
-            </div>
-          </AuthProvider>
-        </ThemeProvider>
+                 {children}
+               </main>
+             </div>
+           </ShiftProvider>
+         </AuthProvider>
+       </ThemeProvider>
       </body>
     </html>
   );

@@ -4,12 +4,28 @@ import { Staff } from "@/lib/db/models";
 
 /**
  * GET /api/staff
- * Fetch all staff members
+ * Fetch all staff members, optionally filtered by query params
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await connectDB();
-    const staff = await Staff.find({}).sort({ name: 1 });
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get("email");
+    const name = searchParams.get("name");
+    const role = searchParams.get("role");
+
+    const filters: Record<string, any> = {};
+    if (email) {
+      // Case-insensitive exact email match
+      filters.email = { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
+    }
+    if (name) {
+      // Case-insensitive partial name match
+      filters.name = { $regex: name, $options: 'i' };
+    }
+    if (role) filters.role = role;
+
+    const staff = await Staff.find(filters).sort({ name: 1 });
     return NextResponse.json(staff);
   } catch (error) {
     console.error("Error fetching staff:", error);
@@ -46,6 +62,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate PIN format if provided
+    if (data.pin && !/^\d{4}$/.test(data.pin)) {
+      return NextResponse.json(
+        { error: "PIN must be exactly 4 digits" },
+        { status: 400 }
+      );
+    }
+
     const staff = await Staff.create({
       name: data.name,
       role: data.role,
@@ -65,3 +89,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create staff" }, { status: 500 });
   }
 }
+

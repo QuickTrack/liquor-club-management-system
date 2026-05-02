@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Package, DollarSign, Building2, RefreshCw, Plus, Scale } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Package, DollarSign, Building2, RefreshCw, Plus, Scale, Search, X } from "lucide-react";
 
 interface UnitConversion {
   unit: string;
@@ -38,6 +38,28 @@ interface Category {
   parentId?: string;
 }
 
+interface Supplier {
+  _id: string;
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  products?: string;
+  totalOrders?: number;
+  totalSpent?: number;
+  creditBalance?: number;
+  rating?: number;
+  status: "Active" | "Inactive";
+}
+
+interface UnitDefinition {
+  _id: string;
+  name: string;
+  abbreviation: string;
+  description?: string;
+  isActive: boolean;
+}
+
 interface AddProductModalProps {
   onClose: () => void;
   onSave: (p: Omit<Product, "id" | "status">) => void;
@@ -46,7 +68,19 @@ interface AddProductModalProps {
 
 export function AddProductModal({ onClose, onSave, product }: AddProductModalProps) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [units, setUnits] = useState<UnitDefinition[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [loadingUnits, setLoadingUnits] = useState(true);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [showUnitModal, setShowUnitModal] = useState(false);
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState("");
+  const [unitSearchQuery, setUnitSearchQuery] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showUnitDropdown, setShowUnitDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const unitDropdownRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState<{
     name: string;
     category: string;
@@ -94,6 +128,28 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
     costPrice: "",
   });
 
+  // New supplier form state
+  const [newSupplier, setNewSupplier] = useState({
+    name: "",
+    contactPerson: "",
+    phone: "",
+    email: "",
+    products: "",
+    rating: 0,
+    status: "Active" as "Active" | "Inactive",
+  });
+   const [supplierErrors, setSupplierErrors] = useState<Record<string, string>>({});
+   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
+
+   // New unit form state
+   const [newUnit, setNewUnit] = useState({
+     name: "",
+     abbreviation: "",
+     description: "",
+   });
+   const [unitErrors, setUnitErrors] = useState<Record<string, string>>({});
+   const [isAddingUnit, setIsAddingUnit] = useState(false);
+
   // Set initial form values when product is provided (edit mode)
   useEffect(() => {
     if (product) {
@@ -116,23 +172,79 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
     }
   }, [product]);
 
-  // Fetch categories from database
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch("/api/categories");
-        if (res.ok) {
-          const data = await res.json();
-          setCategories(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch categories:", error);
-      } finally {
-        setLoadingCategories(false);
-      }
-    };
-    fetchCategories();
-  }, []);
+   // Fetch categories from database
+   useEffect(() => {
+     const fetchCategories = async () => {
+       try {
+         const res = await fetch("/api/categories");
+         if (res.ok) {
+           const data = await res.json();
+           setCategories(data);
+         }
+       } catch (error) {
+         console.error("Failed to fetch categories:", error);
+       } finally {
+         setLoadingCategories(false);
+       }
+     };
+     fetchCategories();
+   }, []);
+
+   // Fetch suppliers from database
+   useEffect(() => {
+     const fetchSuppliers = async () => {
+       try {
+         const res = await fetch("/api/suppliers?status=Active");
+         if (res.ok) {
+           const data = await res.json();
+           setSuppliers(data);
+         }
+       } catch (error) {
+         console.error("Failed to fetch suppliers:", error);
+       } finally {
+         setLoadingSuppliers(false);
+       }
+     };
+     fetchSuppliers();
+   }, []);
+
+   // Fetch units from database
+   useEffect(() => {
+     const fetchUnits = async () => {
+       try {
+         const res = await fetch("/api/units?activeOnly=true");
+         if (res.ok) {
+           const data = await res.json();
+           setUnits(data);
+         }
+       } catch (error) {
+         console.error("Failed to fetch units:", error);
+       } finally {
+         setLoadingUnits(false);
+       }
+     };
+     fetchUnits();
+   }, []);
+
+   // Close dropdown when clicking outside
+   useEffect(() => {
+     const handleClickOutside = (event: MouseEvent) => {
+       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+         setShowDropdown(false);
+       }
+       if (unitDropdownRef.current && !unitDropdownRef.current.contains(event.target as Node)) {
+         setShowUnitDropdown(false);
+       }
+     };
+
+     if (showDropdown || showUnitDropdown) {
+       document.addEventListener("mousedown", handleClickOutside);
+     }
+
+     return () => {
+       document.removeEventListener("mousedown", handleClickOutside);
+     };
+   }, [showDropdown, showUnitDropdown]);
 
   // Set default category when categories load (only for add mode)
   useEffect(() => {
@@ -144,17 +256,15 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
     }
   }, [categories, product]);
 
-  const sections = [
-    { id: 0, title: "Basic Info", fields: ["name", "category"] },
-    { id: 1, title: "Inventory", fields: ["baseUnit", "stockQuantity", "reorderLevel"] },
-    { id: 2, title: "Pricing", fields: ["costPrice", "sellPrice"] },
-    { id: 3, title: "Units", fields: ["alternateUnits"] },
-    { id: 4, title: "Supplier", fields: ["supplier"] },
-  ];
+   const sections = [
+     { id: 0, title: "Basic Info", fields: ["name", "category"] },
+     { id: 1, title: "Inventory", fields: ["baseUnit", "stockQuantity", "reorderLevel"] },
+     { id: 2, title: "Pricing", fields: ["costPrice", "sellPrice"] },
+     { id: 3, title: "Units", fields: ["alternateUnits"] },
+     { id: 4, title: "Supplier", fields: ["supplier"] },
+   ];
 
-  const baseUnits = ["bottle", "liter", "keg", "shot", "crate", "case"];
-
-  const validateForm = () => {
+   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!form.name.trim()) newErrors.name = "Product name is required";
     if (form.stockQuantity < 0) newErrors.stockQuantity = "Stock cannot be negative";
@@ -256,6 +366,132 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
     });
   };
 
+  // Filter suppliers based on search query
+  const filteredSuppliers = suppliers.filter((supplier) =>
+    supplier.name.toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
+    supplier.contactPerson.toLowerCase().includes(supplierSearchQuery.toLowerCase())
+  );
+
+  // Handle adding a new supplier
+  const handleAddSupplier = async () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!newSupplier.name.trim()) {
+      newErrors.name = "Supplier name is required";
+    }
+    if (!newSupplier.contactPerson.trim()) {
+      newErrors.contactPerson = "Contact person is required";
+    }
+    if (!newSupplier.phone.trim()) {
+      newErrors.phone = "Phone number is required";
+    }
+    if (!newSupplier.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newSupplier.email)) {
+      newErrors.email = "Invalid email format";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setSupplierErrors(newErrors);
+      return;
+    }
+
+    setIsAddingSupplier(true);
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newSupplier),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create supplier");
+      }
+
+      const createdSupplier = await res.json();
+      setSuppliers([...suppliers, createdSupplier]);
+      setForm({ ...form, supplier: createdSupplier.name });
+      setShowSupplierModal(false);
+      setNewSupplier({
+        name: "",
+        contactPerson: "",
+        phone: "",
+        email: "",
+        products: "",
+        rating: 0,
+        status: "Active",
+      });
+      setSupplierErrors({});
+    } catch (error: any) {
+      console.error("Failed to add supplier:", error);
+      alert(error.message);
+    } finally {
+      setIsAddingSupplier(false);
+    }
+  };
+
+   const selectSupplier = (supplierName: string) => {
+     setForm({ ...form, supplier: supplierName });
+     setShowDropdown(false);
+     setSupplierSearchQuery("");
+   };
+
+   // Filter units based on search query
+   const filteredUnits = units.filter((unit) =>
+     unit.name.toLowerCase().includes(unitSearchQuery.toLowerCase()) ||
+     unit.abbreviation.toLowerCase().includes(unitSearchQuery.toLowerCase())
+   );
+
+   // Handle adding a new unit
+   const handleAddUnit = async () => {
+     const newErrors: Record<string, string> = {};
+
+     if (!newUnit.name.trim()) {
+       newErrors.name = "Unit name is required";
+     }
+     if (!newUnit.abbreviation.trim()) {
+       newErrors.abbreviation = "Abbreviation is required";
+     }
+
+     if (Object.keys(newErrors).length > 0) {
+       setUnitErrors(newErrors);
+       return;
+     }
+
+     setIsAddingUnit(true);
+     try {
+       const res = await fetch("/api/units", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(newUnit),
+       });
+
+       if (!res.ok) {
+         const err = await res.json();
+         throw new Error(err.error || "Failed to create unit");
+       }
+
+       const createdUnit = await res.json();
+       setUnits([...units, createdUnit]);
+       setForm({ ...form, baseUnit: createdUnit.name });
+       setShowUnitModal(false);
+       setNewUnit({ name: "", abbreviation: "", description: "" });
+       setUnitErrors({});
+     } catch (error: any) {
+       console.error("Failed to add unit:", error);
+       alert(error.message);
+     } finally {
+       setIsAddingUnit(false);
+     }
+   };
+
+   const selectUnit = (unitName: string) => {
+     setForm({ ...form, baseUnit: unitName });
+     setShowUnitDropdown(false);
+     setUnitSearchQuery("");
+   };
+
   const currentSection = sections[activeSection];
 
   const renderField = (field: string) => {
@@ -326,21 +562,116 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
              </div>
            </div>
          );
-      case "baseUnit":
-        return (
-          <div key={field}>
-            <label className="text-sm font-medium text-gray-300 mb-2 block">Base Unit</label>
-            <select
-              value={form.baseUnit}
-              onChange={(e) => setForm({ ...form, baseUnit: e.target.value })}
-              className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
-            >
-              {baseUnits.map((u) => (
-                <option key={u} value={u}>{u}</option>
-              ))}
-            </select>
-          </div>
-        );
+       case "baseUnit":
+         return (
+           <div key={field}>
+             <label className="text-sm font-medium text-gray-300 mb-2 block">Base Unit</label>
+             <div className="relative" ref={unitDropdownRef}>
+               <div className="flex gap-2">
+                 <div className="flex-1 relative">
+                   {/* Main select button */}
+                   <div
+                     onClick={() => setShowUnitDropdown(!showUnitDropdown)}
+                     className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg border border-neutral-600 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer flex items-center justify-between"
+                   >
+                     <span className={form.baseUnit ? "text-white" : "text-gray-400"}>
+                       {form.baseUnit || "Select a unit..."}
+                     </span>
+                     <Search className="w-4 h-4 text-gray-400" />
+                   </div>
+
+                   {/* Dropdown */}
+                   {showUnitDropdown && (
+                     <div className="absolute z-50 w-full mt-2 bg-neutral-700 border border-neutral-600 rounded-lg shadow-xl max-h-80 overflow-hidden flex flex-col">
+                       {/* Search input */}
+                       <div className="p-3 border-b border-neutral-600">
+                         <input
+                           type="text"
+                           value={unitSearchQuery}
+                           onChange={(e) => setUnitSearchQuery(e.target.value)}
+                           onClick={(e) => e.stopPropagation()}
+                           placeholder="Search units..."
+                           className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 text-sm"
+                         />
+                       </div>
+
+                       {/* Results list */}
+                       <div className="overflow-y-auto max-h-56">
+                         {loadingUnits ? (
+                           <div className="p-4 text-center text-gray-400">Loading units...</div>
+                         ) : filteredUnits.length === 0 ? (
+                           <div className="p-4 text-center text-gray-400">
+                             {unitSearchQuery ? "No matching units" : "No units found"}
+                           </div>
+                         ) : (
+                           filteredUnits.map((unit) => (
+                             <div
+                               key={unit._id}
+                               onClick={() => selectUnit(unit.name)}
+                               className={`px-4 py-3 cursor-pointer transition-colors border-b border-neutral-600/50 last:border-b-0 ${
+                                 form.baseUnit === unit.name
+                                   ? "bg-blue-500 text-white"
+                                   : "hover:bg-neutral-600 text-white"
+                               }`}
+                             >
+                               <div className="font-medium text-sm">{unit.name}</div>
+                               <div className="text-xs text-gray-300 mt-0.5">
+                                 {unit.abbreviation}
+                                 {unit.description && ` • ${unit.description}`}
+                               </div>
+                             </div>
+                           ))
+                         )}
+                       </div>
+
+                       {/* Quick-add footer when no results */}
+                       {unitSearchQuery && filteredUnits.length === 0 && (
+                         <div className="p-3 border-t border-neutral-600 bg-neutral-700/50">
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setNewUnit({
+                                 name: unitSearchQuery,
+                                 abbreviation: "",
+                                 description: "",
+                               });
+                               setShowUnitModal(true);
+                             }}
+                             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                           >
+                             <Plus className="w-4 h-4" />
+                             Create new unit
+                           </button>
+                         </div>
+                       )}
+                     </div>
+                   )}
+                 </div>
+
+                 {/* Add New Unit button */}
+                 <button
+                   type="button"
+                   onClick={() => setShowUnitModal(true)}
+                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                 >
+                   <Plus className="w-4 h-4" />
+                   Add New
+                 </button>
+               </div>
+
+               {/* Clear button when unit selected */}
+               {form.baseUnit && (
+                 <button
+                   type="button"
+                   onClick={() => setForm({ ...form, baseUnit: "" })}
+                   className="absolute right-14 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                 >
+                   <X className="w-4 h-4" />
+                 </button>
+               )}
+             </div>
+           </div>
+         );
       case "stockQuantity":
         return (
           <div key={field}>
@@ -580,19 +911,119 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
             </div>
           </div>
         );
-      case "supplier":
-        return (
-          <div key={field}>
-            <label className="text-sm font-medium text-gray-300 mb-2 block">Supplier</label>
-            <input
-              type="text"
-              value={form.supplier}
-              onChange={(e) => setForm({ ...form, supplier: e.target.value })}
-              className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
-              placeholder="e.g., EABL, Kenya Breweries"
-            />
-          </div>
-        );
+        case "supplier":
+          return (
+            <div key={field}>
+              <label className="text-sm font-medium text-gray-300 mb-2 block">Supplier</label>
+              <div className="relative" ref={dropdownRef}>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    {/* Main select button */}
+                    <div
+                      onClick={() => setShowDropdown(!showDropdown)}
+                      className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg border border-neutral-600 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer flex items-center justify-between"
+                    >
+                      <span className={form.supplier ? "text-white" : "text-gray-400"}>
+                        {form.supplier || "Select a supplier..."}
+                      </span>
+                      <Search className="w-4 h-4 text-gray-400" />
+                    </div>
+
+                    {/* Dropdown */}
+                    {showDropdown && (
+                      <div className="absolute z-50 w-full mt-2 bg-neutral-700 border border-neutral-600 rounded-lg shadow-xl max-h-80 overflow-hidden flex flex-col">
+                        {/* Search input */}
+                        <div className="p-3 border-b border-neutral-600">
+                          <input
+                            type="text"
+                            value={supplierSearchQuery}
+                            onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Search suppliers..."
+                            className="w-full bg-neutral-800 text-white px-3 py-2 rounded border border-neutral-600 focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+
+                        {/* Results list */}
+                        <div className="overflow-y-auto max-h-56">
+                          {loadingSuppliers ? (
+                            <div className="p-4 text-center text-gray-400">Loading suppliers...</div>
+                          ) : filteredSuppliers.length === 0 ? (
+                            <div className="p-4 text-center text-gray-400">
+                              {supplierSearchQuery ? "No matching suppliers" : "No suppliers found"}
+                            </div>
+                          ) : (
+                            filteredSuppliers.map((supplier) => (
+                              <div
+                                key={supplier._id}
+                                onClick={() => selectSupplier(supplier.name)}
+                                className={`px-4 py-3 cursor-pointer transition-colors border-b border-neutral-600/50 last:border-b-0 ${
+                                  form.supplier === supplier.name
+                                    ? "bg-blue-500 text-white"
+                                    : "hover:bg-neutral-600 text-white"
+                                }`}
+                              >
+                                <div className="font-medium text-sm">{supplier.name}</div>
+                                <div className="text-xs text-gray-300 mt-0.5">
+                                  {supplier.contactPerson} • {supplier.phone}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Quick-add footer when no results */}
+                        {supplierSearchQuery && filteredSuppliers.length === 0 && (
+                          <div className="p-3 border-t border-neutral-600 bg-neutral-700/50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewSupplier({
+                                  name: supplierSearchQuery,
+                                  contactPerson: "",
+                                  phone: "",
+                                  email: "",
+                                  products: "",
+                                  rating: 0,
+                                  status: "Active",
+                                });
+                                setShowSupplierModal(true);
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Create new supplier
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Add New Supplier button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSupplierModal(true)}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add New
+                  </button>
+                </div>
+
+                {/* Clear button when supplier selected */}
+                {form.supplier && (
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, supplier: "" })}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
       default:
         return null;
     }
@@ -728,6 +1159,239 @@ export function AddProductModal({ onClose, onSave, product }: AddProductModalPro
           </div>
         </div>
       </div>
+
+      {/* Add Supplier Modal */}
+      {showSupplierModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-800 rounded-2xl border border-neutral-700 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-700">
+              <h2 className="text-xl font-bold text-white">Add New Supplier</h2>
+              <button
+                type="button"
+                onClick={() => setShowSupplierModal(false)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-neutral-700 rounded-lg transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Supplier Name *
+                </label>
+                <input
+                  type="text"
+                  value={newSupplier.name}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="e.g., East African Breweries Limited"
+                />
+                {supplierErrors.name && (
+                  <p className="mt-1 text-xs text-red-400">{supplierErrors.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Contact Person *
+                </label>
+                <input
+                  type="text"
+                  value={newSupplier.contactPerson}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, contactPerson: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="e.g., John Doe"
+                />
+                {supplierErrors.contactPerson && (
+                  <p className="mt-1 text-xs text-red-400">{supplierErrors.contactPerson}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Phone *
+                </label>
+                <input
+                  type="tel"
+                  value={newSupplier.phone}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="+254 700 000 000"
+                />
+                {supplierErrors.phone && (
+                  <p className="mt-1 text-xs text-red-400">{supplierErrors.phone}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={newSupplier.email}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="supplier@example.com"
+                />
+                {supplierErrors.email && (
+                  <p className="mt-1 text-xs text-red-400">{supplierErrors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Products
+                </label>
+                <input
+                  type="text"
+                  value={newSupplier.products}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, products: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="Beer, spirits, wines, soft drinks"
+                />
+                <p className="mt-1 text-xs text-gray-400">Comma-separated list of products supplied</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Rating (0-5)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="1"
+                  value={newSupplier.rating}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, rating: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Status
+                </label>
+                <select
+                  value={newSupplier.status}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, status: e.target.value as "Active" | "Inactive" })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-700">
+              <button
+                type="button"
+                onClick={() => setShowSupplierModal(false)}
+                className="px-4 py-2.5 border border-neutral-600 text-gray-300 rounded-lg hover:bg-neutral-700 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddSupplier}
+                disabled={isAddingSupplier}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isAddingSupplier ? "Adding..." : "Add Supplier"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Unit Modal */}
+      {showUnitModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-800 rounded-2xl border border-neutral-700 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-700">
+              <h2 className="text-xl font-bold text-white">Add New Unit</h2>
+              <button
+                type="button"
+                onClick={() => setShowUnitModal(false)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-neutral-700 rounded-lg transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Unit Name *
+                </label>
+                <input
+                  type="text"
+                  value={newUnit.name}
+                  onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="e.g., BOTTLE, CASE, LITER"
+                />
+                <p className="mt-1 text-xs text-gray-400">Use uppercase for consistency</p>
+                {unitErrors.name && (
+                  <p className="mt-1 text-xs text-red-400">{unitErrors.name}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Abbreviation *
+                </label>
+                <input
+                  type="text"
+                  value={newUnit.abbreviation}
+                  onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="e.g., BT, CS, L"
+                />
+                {unitErrors.abbreviation && (
+                  <p className="mt-1 text-xs text-red-400">{unitErrors.abbreviation}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={newUnit.description}
+                  onChange={(e) => setNewUnit({ ...newUnit, description: e.target.value })}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 border border-neutral-600"
+                  placeholder="e.g., Standard 750ml bottle"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-neutral-700">
+              <button
+                type="button"
+                onClick={() => setShowUnitModal(false)}
+                className="px-4 py-2.5 border border-neutral-600 text-gray-300 rounded-lg hover:bg-neutral-700 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddUnit}
+                disabled={isAddingUnit}
+                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isAddingUnit ? "Adding..." : "Add Unit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

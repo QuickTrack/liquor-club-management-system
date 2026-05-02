@@ -23,6 +23,7 @@ import {
   User,
   ChevronRight,
   FolderTree,
+  Lock,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/drinks", label: "Bar & Drinks", icon: FlaskConical },
   { href: "/members", label: "Customers", icon: Users },
   { href: "/staff", label: "Staff", icon: UserCog },
+  { href: "/shift/intake", label: "Shift Opening", icon: Lock },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/financial", label: "Financial", icon: Wallet },
   { href: "/categories", label: "Categories", icon: FolderTree },

@@ -100,18 +100,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      localStorage.removeItem("token");
-      setToken(null);
-      setUser(null);
-      router.push("/login");
-    }
-  };
+   const logout = async () => {
+     try {
+       await fetch("/api/auth/logout", { method: "POST" });
+     } catch (error) {
+       console.error("Logout error:", error);
+     } finally {
+       localStorage.removeItem("token");
+       localStorage.removeItem("activeShift"); // Clear active shift on logout
+       setToken(null);
+       setUser(null);
+       router.push("/login");
+     }
+   };
 
   const refreshToken = async () => {
     try {

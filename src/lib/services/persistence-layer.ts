@@ -431,22 +431,34 @@ export class OrderRepository extends BaseRepository<IOrder> {
     return this.transactionManager.executeWithRetry(
       "create_order_with_inventory",
       "Order",
-      async (session, ctx) => {
-        // Calculate totals
-        let subtotal = 0;
-        for (const item of orderData.items) {
-          subtotal += (item.unitPrice || 0) * item.quantity;
-        }
-        const tax = subtotal * 0.16;
-        const total = subtotal + tax;
+        async (session, ctx) => {
+          // Calculate totals - prices from POS are VAT-inclusive (gross)
+          let grossSubtotal = 0;
+          for (const item of orderData.items) {
+            grossSubtotal += (item.unitPrice || 0) * item.quantity;
+          }
+          // Derive net subtotal (exclusive of VAT) using 16% rate
+          const subtotal = grossSubtotal / 1.16;
+          const tax = grossSubtotal - subtotal;
+          const total = grossSubtotal;
 
-        // Map customerId to customer if present
-        const orderInput: any = { ...orderData };
-        if (orderInput.customerId) {
-          orderInput.customer = orderInput.customerId;
-        }
+          // Prepare order input
+          const orderInput: any = { ...orderData };
 
-        // Create order
+          // Ensure customer is set: use provided customerId or fall back to Walk-in Customer
+          if (orderInput.customerId) {
+            orderInput.customer = orderInput.customerId;
+          } else {
+            // Find default walk-in customer
+            const walkIn = await Customer.findOne({ name: "Walk-in Customer" }).session(session);
+            if (walkIn) {
+              orderInput.customer = walkIn._id;
+            } else {
+              throw new Error("No customer provided and no default Walk-in Customer exists");
+            }
+          }
+
+          // Create order
         const order = new Order({
           ...orderInput,
           orderId: `ORD-${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
@@ -487,29 +499,41 @@ export class OrderRepository extends BaseRepository<IOrder> {
     );
   }
 
-    async createHeldOrder(
-    orderData: any,
-    context: TransactionContext
-  ): Promise<OperationResult<IOrder>> {
-    return this.transactionManager.executeWithRetry(
-      "create_held_order",
-      "Order",
-      async (session, ctx) => {
-        // Calculate totals
-        let subtotal = 0;
-        for (const item of orderData.items) {
-          subtotal += (item.unitPrice || 0) * item.quantity;
-        }
-        const tax = subtotal * 0.16;
-        const total = subtotal + tax;
+     async createHeldOrder(
+     orderData: any,
+     context: TransactionContext
+   ): Promise<OperationResult<IOrder>> {
+     return this.transactionManager.executeWithRetry(
+       "create_held_order",
+       "Order",
+        async (session, ctx) => {
+          // Calculate totals - prices from POS are VAT-inclusive (gross)
+          let grossSubtotal = 0;
+          for (const item of orderData.items) {
+            grossSubtotal += (item.unitPrice || 0) * item.quantity;
+          }
+          // Derive net subtotal (exclusive of VAT) using 16% rate
+          const subtotal = grossSubtotal / 1.16;
+          const tax = grossSubtotal - subtotal;
+          const total = grossSubtotal;
 
-        // Map customerId to customer if present
-        const orderInput: any = { ...orderData };
-        if (orderInput.customerId) {
-          orderInput.customer = orderInput.customerId;
-        }
+          // Prepare order input
+          const orderInput: any = { ...orderData };
 
-        // Create order
+          // Ensure customer is set: use provided customerId or fall back to Walk-in Customer
+          if (orderInput.customerId) {
+            orderInput.customer = orderInput.customerId;
+          } else {
+            // Find default walk-in customer
+            const walkIn = await Customer.findOne({ name: "Walk-in Customer" }).session(session);
+            if (walkIn) {
+              orderInput.customer = walkIn._id;
+            } else {
+              throw new Error("No customer provided and no default Walk-in Customer exists");
+            }
+          }
+
+          // Create order
         const order = new Order({
           ...orderInput,
           orderId: `ORD-${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`,

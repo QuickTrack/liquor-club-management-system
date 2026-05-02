@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { useShift } from "@/components/ShiftContext";
 import {
   ShoppingBasket,
   ShoppingCart,
@@ -23,8 +24,11 @@ import {
   LogOut,
   SwitchCamera,
   ArrowRightLeft,
+  Lock,
+  AlertTriangle,
 } from "lucide-react";
 import EndOfShiftWizard from "@/components/EndOfShiftWizard";
+import { useRouter } from "next/navigation";
 
 interface CartItem {
   id: string;
@@ -37,8 +41,9 @@ interface CartItem {
   unitPrice: number; // Computed: basePrice * conversionFactor (used for display)
 }
 
-interface Order {
+ interface Order {
   id: string;
+  _id?: string;  // MongoDB ObjectId (from database)
   customer: Customer;
   items: CartItem[];
   subtotal: number;
@@ -92,6 +97,7 @@ interface StaffMember {
   role: string;
   phone?: string;
   email?: string;
+  pin?: string | null;
 }
 
 const tierDiscounts: Record<Customer["tier"], number> = {
@@ -140,7 +146,8 @@ const initialOrder: Order = {
 };
 
 export default function POSPage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
+  const router = useRouter();
   const [currentOrder, setCurrentOrder] = useState<Order>(initialOrder);
   const [mounted, setMounted] = useState(false);
   const [heldOrders, setHeldOrders] = useState<Order[]>([]);
@@ -172,17 +179,81 @@ export default function POSPage() {
     email: "",
     tier: "Bronze" as "Bronze" | "Silver" | "Gold" | "VIP",
   });
-  const [customerError, setCustomerError] = useState<string>("");
+    const [customerError, setCustomerError] = useState<string>("");
+    const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
 
-  // Staff assignment states
-  const [currentStaff, setCurrentStaff] = useState<StaffMember | null>(null);
-  const [showSwitchUserModal, setShowSwitchUserModal] = useState(false);
+   // Staff assignment states
+   const [currentStaff, setCurrentStaff] = useState<StaffMember | null>(null);
+   const [showSwitchUserModal, setShowSwitchUserModal] = useState(false);
    const [showHandoverModal, setShowHandoverModal] = useState(false);
    const [showEndOfShiftWizard, setShowEndOfShiftWizard] = useState(false);
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
-  const [loadingStaff, setLoadingStaff] = useState(false);
+   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+   const [loadingStaff, setLoadingStaff] = useState(false);
    const [handoverFrom, setHandoverFrom] = useState<StaffMember | null>(null);
    const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+    // Shift state from context
+    const { activeShift, setActiveShift, shiftLoaded } = useShift();
+    const [shiftLoading, setShiftLoading] = useState(false);
+
+   // PIN verification for staff switching
+   const [showStaffPinModal, setShowStaffPinModal] = useState(false);
+   const [selectedStaffForSwitch, setSelectedStaffForSwitch] = useState<StaffMember | null>(null);
+   const [staffPinInput, setStaffPinInput] = useState("");
+   const [staffPinError, setStaffPinError] = useState("");
+
+   // Check for active shift for current staff member
+   const ensureActiveShift = useCallback(async (staffId: string) => {
+     try {
+       const res = await fetch(`/api/shift-opening?cashierId=${staffId}&status=open`);
+       if (res.ok) {
+         const data = await res.json();
+         if (data && data.length > 0) {
+           // Active shift exists
+           return true;
+         }
+       }
+       // No active shift - redirect to intake
+       if (!window.location.pathname.startsWith("/shift/intake")) {
+         router.push(`/shift/intake?returnTo=/pos`);
+       }
+       return false;
+     } catch (err) {
+       console.error("Failed to check shift:", err);
+       router.push(`/shift/intake?returnTo=/pos`);
+       return false;
+     }
+    }, [router]);
+
+    // Check active shift for current staff
+    const checkActiveShift = useCallback(async (staffId: string) => {
+      setShiftLoading(true);
+      try {
+        const res = await fetch(`/api/shift-opening?cashierId=${staffId}&status=open`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setActiveShift(data[0]);
+            setShiftLoading(false);
+            return;
+          }
+        }
+        // No active shift
+        setActiveShift(null);
+        // Only redirect if we're not already on intake page
+        if (!window.location.pathname.startsWith("/shift/intake")) {
+          router.push(`/shift/intake?returnTo=/pos`);
+        }
+      } catch (err) {
+        console.error("Failed to check shift:", err);
+        setActiveShift(null);
+        if (!window.location.pathname.startsWith("/shift/intake")) {
+          router.push(`/shift/intake?returnTo=/pos`);
+        }
+      } finally {
+        setShiftLoading(false);
+      }
+    }, [router, setActiveShift]);
 
     // Generate order ID with optional staff code
     const getOrderId = useCallback((customerName: string) => {
@@ -213,23 +284,26 @@ export default function POSPage() {
       }
     }, [heldOrders]);
 
-    // Load held orders from database when staff changes
-    useEffect(() => {
-      if (!currentStaff) return;
-      const loadHeldOrdersFromDB = async () => {
-        try {
-          const response = await fetch(`/api/orders?status=held&assignedTo=${currentStaff._id}`);
-          if (response.ok) {
-            const data = await response.json();
-            // Replace heldOrders with database state (overwrites localStorage)
-            setHeldOrders(data.orders || []);
-          }
-        } catch (error) {
-          console.error("Failed to load held orders from database:", error);
-        }
-      };
-      loadHeldOrdersFromDB();
-    }, [currentStaff]);
+     // Load held orders from database when staff changes
+     useEffect(() => {
+       if (!currentStaff) return;
+       const loadHeldOrdersFromDB = async () => {
+         try {
+           const response = await fetch(`/api/orders?status=held&assignedTo=${currentStaff._id}`);
+           if (response.ok) {
+             const data = await response.json();
+             // Replace heldOrders with database state (overwrites localStorage)
+             setHeldOrders(data.orders || []);
+           }
+         } catch (error) {
+           console.error("Failed to load held orders from database:", error);
+         }
+       };
+       loadHeldOrdersFromDB();
+
+       // Check active shift for this staff member
+       checkActiveShift(currentStaff._id);
+     }, [currentStaff, checkActiveShift]);
 
     useEffect(() => {
       const initializeData = async () => {
@@ -289,7 +363,17 @@ export default function POSPage() {
       initializeData();
     }, []);
 
-   // Handle click outside to close search dropdown
+    // Check for active shift requirement after data loads
+    useEffect(() => {
+      if (mounted && isAuthenticated && currentStaff && !shiftLoading && shiftLoaded && !activeShift) {
+        // Only redirect if we're not already on the intake page
+        if (!window.location.pathname.startsWith("/shift/intake")) {
+          router.push(`/shift/intake?returnTo=/pos`);
+        }
+      }
+    }, [mounted, isAuthenticated, currentStaff, shiftLoading, shiftLoaded, activeShift, router]);
+
+    // Handle click outside to close search dropdown
    useEffect(() => {
      const handleClickOutside = (event: MouseEvent) => {
        if (
@@ -365,81 +449,138 @@ export default function POSPage() {
     return result;
   }, [products, searchTerm, activeCategory]);
 
-    const updatePricesWithCustomer = (customer: Customer) => {
-      const newItems = currentOrder.items.map((item) => {
-        const product = products.find((p) => p.id === item.id);
-        if (!product) return item;
+     const updatePricesWithCustomer = (customer: Customer) => {
+       const newItems = currentOrder.items.map((item) => {
+         const product = products.find((p) => p.id === item.id);
+         if (!product) return item;
 
-        // Find the currently selected unit (fallback to base unit)
-        const selectedUnit = product.uom.units.find(u => u.abbreviation === item.unit)
-          || product.uom.units.find(u => u.isBase)
-          || product.uom.units[0];
+         // Find the currently selected unit (fallback to base unit)
+         const selectedUnit = product.uom?.units?.find(u => u.abbreviation === item.unit)
+           || product.uom?.units?.find(u => u.isBase)
+           || product.uom?.units?.[0];
 
-        // Use the predefined fixed price from unit configuration (no computation)
-        const unitPrice = selectedUnit.sellPrice;
+         if (!selectedUnit) return item; // No unit available, skip update
 
-        // Apply happy hour if applicable (only for Shot category)
-        let finalUnitPrice = unitPrice;
-        if (isHappyHour && product.category === "Shot") {
-          finalUnitPrice = unitPrice * 0.8;
-        }
+         // Use the predefined fixed price from unit configuration (no computation)
+         const unitPrice = selectedUnit.sellPrice || item.unitPrice;
 
-        return {
-          ...item,
-          basePrice: product.price,
-          unitPrice: finalUnitPrice,
-          conversionFactor: selectedUnit.conversionFactor,
-          unit: selectedUnit.abbreviation,
-        };
-      });
+         // Apply happy hour if applicable (shots only)
+         let finalUnitPrice = unitPrice;
+         if (isHappyHour && product.category === "Shot") {
+           finalUnitPrice = unitPrice * 0.8;
+         }
 
-      const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-      const netSubtotal = grossSubtotal / 1.16;
-      const tax = grossSubtotal - netSubtotal;
+         return {
+           ...item,
+           basePrice: product.price || item.basePrice,
+           unitPrice: finalUnitPrice,
+           conversionFactor: selectedUnit.conversionFactor || item.conversionFactor,
+           unit: selectedUnit.abbreviation || item.unit,
+          };
+        });
 
-      setCurrentOrder({ ...currentOrder, id: getOrderId(customer.name), items: newItems, customer, subtotal: netSubtotal, tierDiscount: 0, tax, total: grossSubtotal });
-    };
+        const grossSubtotal = newItems.reduce((sum, item) => sum + (item.unitPrice || 0) * item.quantity, 0);
+        const netSubtotal = grossSubtotal / 1.16;
+        const tax = grossSubtotal - netSubtotal;
 
-  const handleAddCustomer = async () => {
-    if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
-      setCustomerError("Please fill in all required fields");
+        setCurrentOrder({ 
+          ...currentOrder, 
+          id: getOrderId(customer.name || customer._id || ""), 
+          items: newItems, 
+          customer, 
+          subtotal: netSubtotal, 
+          tierDiscount: 0, 
+          tax, 
+          total: grossSubtotal 
+        });
+      };
+
+   const handleAddCustomer = async () => {
+    console.log("Add customer clicked", { newCustomer, token: token ? "present" : "missing" });
+    
+    if (!token) {
+      setCustomerError("Session expired. Please log in again.");
       return;
     }
 
+    const name = newCustomer.name.trim();
+    const phone = newCustomer.phone.trim();
+    
+    if (!name || !phone) {
+      setCustomerError("Please fill in both name and phone");
+      return;
+    }
+
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (phoneDigits.length < 9) {
+      setCustomerError("Phone number must have at least 9 digits");
+      return;
+    }
+
+    setIsCreatingCustomer(true);
+    setCustomerError("");
+
     try {
+      console.log("Sending customer creation request:", { name, phone, email: newCustomer.email, tier: newCustomer.tier });
+      
       const response = await fetch("/api/customers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          name: newCustomer.name.trim(),
-          phone: newCustomer.phone.trim(),
+          name,
+          phone,
           email: newCustomer.email.trim(),
           tier: newCustomer.tier,
         }),
       });
 
+      console.log("Response status:", response.status);
+      
+      const data = await response.json();
+      console.log("Response data:", data);
+
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || "Failed to create customer");
       }
 
-      const createdCustomer = await response.json();
-      setCustomers([...customers, createdCustomer]);
-      setNewCustomer({
-        name: "",
-        phone: "",
-        email: "",
-        tier: "Bronze",
-      });
-      setCustomerError("");
+      const createdCustomer = data;
+      console.log("Created customer:", createdCustomer);
+      
+      setCustomers(prev => [...prev, createdCustomer]);
+      
+      // Update order with new customer
+      try {
+        console.log("Updating order with customer:", createdCustomer._id || createdCustomer.id);
+        updatePricesWithCustomer(createdCustomer);
+      } catch (updateErr: any) {
+        console.error("Error updating order with new customer:", updateErr);
+      }
+      
+      setNewCustomer({ name: "", phone: "", email: "", tier: "Bronze" });
       setShowNewCustomer(false);
-      setCustomerSearch("");
+      setShowCustomerSelect(false);
     } catch (error: any) {
+      console.error("Create customer error:", error);
       setCustomerError(error.message || "Failed to create customer");
+    } finally {
+      setIsCreatingCustomer(false);
     }
   };
 
-   const addToOrder = (product: ProductWithUOM) => {
+    const addToOrder = (product: ProductWithUOM) => {
+      // Check stock availability before adding
+      const availableStock = product.stock || 0;
+      const currentQuantityInOrder = currentOrder.items.find(item => item.id === product.id)?.quantity || 0;
+      const requestedQuantity = currentQuantityInOrder + 1;
+
+      if (requestedQuantity > availableStock) {
+        alert(`Insufficient stock for "${product.name}". Available: ${availableStock}, Requested: ${requestedQuantity}`);
+        return;
+      }
+
       // Get the base unit (isBase: true) as default
       const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
 
@@ -475,13 +616,25 @@ export default function POSPage() {
       setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
     };
 
-   const updateQuantity = (id: string, delta: number) => {
-     const newItems = currentOrder.items.map((item) => item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item).filter((item) => item.quantity > 0);
-     const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-     const netSubtotal = grossSubtotal / 1.16;
-     const tax = grossSubtotal - netSubtotal;
-     setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
-   };
+    const updateQuantity = (id: string, delta: number) => {
+      const item = currentOrder.items.find(item => item.id === id);
+      if (!item) return;
+
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      const newQuantity = item.quantity + delta;
+      if (newQuantity > (product.stock || 0)) {
+        alert(`Cannot increase quantity for "${product.name}". Available stock: ${product.stock}`);
+        return;
+      }
+
+      const newItems = currentOrder.items.map((item) => item.id === id ? { ...item, quantity: Math.max(0, newQuantity) } : item).filter((item) => item.quantity > 0);
+      const grossSubtotal = newItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+      const netSubtotal = grossSubtotal / 1.16;
+      const tax = grossSubtotal - netSubtotal;
+      setCurrentOrder({ ...currentOrder, items: newItems, subtotal: netSubtotal, tax, total: grossSubtotal });
+    };
 
     const changeUnit = (id: string, unitAbbreviation: string) => {
       const newItems = currentOrder.items.map((item) => {
@@ -617,39 +770,177 @@ export default function POSPage() {
   const convertToBill = () => {
     if (currentOrder.items.length === 0) return;
     setBilledOrder({ ...currentOrder, status: "billed" });
+    setChangeAmount(String(currentOrder.total));
     setShowChangeInput(true);
   };
 
-const completeSale = () => {
-  if (!billedOrder) return;
-  if (paymentMethod === "account") {
-    const updatedCustomer = {
-      ...billedOrder.customer,
-      creditUsed: billedOrder.customer.creditUsed + billedOrder.total,
-    };
-    setBilledOrder({ ...billedOrder, status: "paid", customer: updatedCustomer });
-    setShowReceipt(true);
-    setShowChangeInput(false);
-    clearOrder();
-    return;
-  }
-  const amountPaid = parseFloat(changeAmount) || 0;
-  if (amountPaid < billedOrder.total) { alert("Insufficient payment"); return; }
-  setBilledOrder({ ...billedOrder, status: "paid" });
-  setShowReceipt(true);
-  setShowChangeInput(false);
-  clearOrder();
-};
+  const completeSale = async () => {
+    if (!billedOrder) return;
+    if (paymentMethod === "account") {
+      const updatedCustomer = {
+        ...billedOrder.customer,
+        creditUsed: billedOrder.customer.creditUsed + billedOrder.total,
+      };
+      setBilledOrder({ ...billedOrder, status: "paid", customer: updatedCustomer });
+      setShowReceipt(true);
+      setShowChangeInput(false);
+      clearOrder();
+      return;
+    }
+       const amountPaid = parseFloat(changeAmount) || 0;
+    console.log("Amount paid:", amountPaid, "Type:", typeof amountPaid);
+    console.log("Order total:", billedOrder.total, "Type:", typeof billedOrder.total);
+    if (amountPaid < billedOrder.total) { alert("Insufficient payment"); return; }
+    
+    console.log("Billed order:", JSON.stringify({
+      id: billedOrder.id,
+      _id: (billedOrder as any)._id,
+      customer: billedOrder.customer,
+      items: billedOrder.items.length,
+      total: billedOrder.total,
+    }, null, 2));
+
+    try {
+      // Determine if order has a DB ID (MongoDB ObjectId _id) vs generated temp ID
+      // DB orders have 24-char _id field; new orders have short id field
+      const hasDbId = !!(billedOrder._id && billedOrder._id.length === 24);
+      
+       const orderItems = billedOrder.items.map(item => ({
+        productId: item.id,
+        name: item.name,
+        price: item.basePrice,
+        quantity: item.quantity,
+        category: item.category,
+        unit: item.unit,
+        conversionFactor: item.conversionFactor,
+        unitPrice: item.unitPrice,
+      }));
+
+      console.log("Order items:", JSON.stringify(orderItems, null, 2));
+
+       const basePayload = {
+         customerId: (billedOrder.customer && billedOrder.customer._id) || null,
+         items: orderItems,
+         paymentMethod,
+         status: "paid",
+         assignedTo: currentStaff?._id || null,
+         userId: user?._id || null,
+         userName: user?.name || "System",
+       };
+
+       console.log("Payment payload:", JSON.stringify(basePayload, null, 2));
+      console.log("Customer:", billedOrder.customer);
+      console.log("Customer ID from payload:", basePayload.customerId);
+      console.log("Items IDs:", orderItems.map(i => ({ productId: i.productId, name: i.name })));
+
+      let response;
+      
+       if (hasDbId) {
+         // Existing DB order - use payment completion endpoint
+         const targetOrderId = billedOrder._id || billedOrder.id;  // _id is MongoDB ObjectId
+         response = await fetch("/api/orders/complete-payment", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             orderId: targetOrderId,
+             paymentMethod,
+             amount: billedOrder.total,
+             cashTendered: paymentMethod === "cash" ? amountPaid : undefined,
+             changeGiven: paymentMethod === "cash" ? getChange() : undefined,
+             userId: user?._id || "system",
+             userName: user?.name || "System",
+             terminalId: currentStaff?._id,
+           }),
+         });
+      } else {
+        // New order - create it directly as paid through Order endpoint
+        // Note: OrderRepository.createWithInventory handles inventory for "paid" orders
+        response = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(basePayload),
+        });
+      }
+
+       const data = await response.json();
+       console.log("Payment response:", response.status, response.statusText, data);
+       if (!response.ok) {
+         const errorMsg = data.details ? data.error + ": " + JSON.stringify(data.details) : data.error || "Payment processing failed";
+         throw new Error(errorMsg);
+       }
+
+      setBilledOrder({ ...billedOrder, status: "paid" });
+      setShowReceipt(true);
+      setShowChangeInput(false);
+      clearOrder();
+      
+      // Refresh held orders from database
+      if (currentStaff) {
+        const ordersRes = await fetch(`/api/orders?assignedTo=${currentStaff._id}&status=held&limit=100`);
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setHeldOrders(ordersData.orders || []);
+        }
+      }
+    } catch (err: any) {
+      alert(`Payment failed: ${err.message}`);
+      console.error("Payment error:", err);
+    }
+  };
 
   const getChange = () => parseFloat(changeAmount) - (billedOrder?.total || 0);
 
-  // Switch current staff member
-  const handleSwitchStaff = (staff: StaffMember) => {
-    // Clear current draft order to avoid confusion
+  // Initiate staff switch: open PIN verification modal
+  const initiateSwitchStaff = (staff: StaffMember) => {
+    setSelectedStaffForSwitch(staff);
+    setShowSwitchUserModal(false);
+    setStaffPinInput("");
+    setStaffPinError("");
+    setShowStaffPinModal(true);
+  };
+
+  // Perform actual staff switch after PIN verification
+  const performSwitch = (staff: StaffMember) => {
     clearOrder();
     setCurrentStaff(staff);
     localStorage.setItem("pos_current_staff_id", staff._id);
-    setShowSwitchUserModal(false);
+    // Clear active shift - will trigger checkActiveShift which redirects to intake if needed
+    setActiveShift(null);
+    localStorage.removeItem("activeShift");
+    setShowStaffPinModal(false);
+    setSelectedStaffForSwitch(null);
+    setStaffPinInput("");
+    setStaffPinError("");
+  };
+
+  // Verify staff PIN via API
+  const verifyStaffPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaffForSwitch) return;
+
+    setStaffPinError("");
+
+    try {
+      const response = await fetch("/api/staff/verify-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: selectedStaffForSwitch._id,
+          pin: staffPinInput,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Invalid PIN");
+      }
+
+      // PIN correct, perform switch
+      performSwitch(selectedStaffForSwitch);
+    } catch (err: any) {
+      setStaffPinError(err.message || "Failed to verify PIN");
+    }
   };
 
   // Perform handover: transfer held orders from one staff to another
@@ -659,7 +950,7 @@ const completeSale = () => {
     try {
       const ordersToTransfer = selectedOrderIds.length > 0
         ? selectedOrderIds
-          : heldOrders.filter(o => (o.customer._id || o.customer.id) !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o.id).filter(Boolean);
+          : heldOrders.filter(o => (o.customer._id || o.customer.id) !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o._id || o.id).filter(Boolean);
 
       if (ordersToTransfer.length === 0) {
         alert("No orders to transfer");
@@ -803,31 +1094,35 @@ const completeSale = () => {
                    <div className="p-3 text-center text-gray-500 text-sm">
                      <p>No products</p>
                    </div>
-                 ) : (
-                   <div className="p-2">
-                     {filteredProducts.map((product) => {
-                       const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
-                       return (
-                         <button 
-                           key={product.id} 
-                           onClick={() => addToOrder(product)} 
-                           className="w-full text-left p-2.5 hover:bg-neutral-700 rounded transition-colors"
-                         >
-                           <p className="text-white text-sm truncate">{product.name}</p>
-                           <div className="flex items-center justify-between mt-1">
-                             <p className="text-amber-500 text-sm font-bold">Ksh {(product.price || 0).toFixed(2)}</p>
-                             <p className="text-gray-500 text-xs">Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
-                           </div>
-               </button>
-
-                       );
-                     })}
-                   </div>
-                 )}
-              </div>
-            )}
+                  ) : (
+                    <div className="p-2">
+                      {filteredProducts.map((product) => {
+                        const baseUnit = product.uom.units.find(u => u.isBase) || product.uom.units[0];
+                        const isOutOfStock = (product.stock || 0) <= 0;
+                        return (
+                          <button 
+                            key={product.id} 
+                            onClick={() => addToOrder(product)} 
+                            disabled={isOutOfStock}
+                            className={`w-full text-left p-2.5 rounded transition-colors ${isOutOfStock ? 'bg-neutral-900 opacity-50 cursor-not-allowed' : 'hover:bg-neutral-700'}`}
+                          >
+                            <p className="text-white text-sm truncate">{product.name}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <p className={`text-sm font-bold ${isOutOfStock ? 'text-red-400' : 'text-amber-500'}`}>Ksh {(product.price || 0).toFixed(2)}</p>
+                              <p className={`text-xs ${isOutOfStock ? 'text-red-400' : 'text-gray-500'}`}>Stock: {product.stock} {baseUnit?.abbreviation || 'u'}</p>
+                            </div>
+                            {isOutOfStock && (
+                              <p className="text-red-400 text-xs mt-1 font-medium">Out of Stock</p>
+                            )}
+                          </button>
+                        );
+                       })}
+                     </div>
+                   )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
         {/* Compact Category Filters */}
         <div className="flex gap-1.5 flex-wrap">
@@ -958,8 +1253,21 @@ const completeSale = () => {
             <div className="mb-4">
               <input type="text" placeholder="Name" value={newCustomer.name} onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2.5 rounded-lg mb-2 focus:outline-none focus:border-blue-500 text-sm" />
               <input type="text" placeholder="Phone" value={newCustomer.phone} onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})} className="w-full bg-neutral-700 text-white px-4 py-2.5 rounded-lg mb-2 focus:outline-none focus:border-blue-500 text-sm" />
-              {customerError && <p className="text-red-500 text-sm mb-2">{customerError}</p>}
-              <button onClick={handleAddCustomer} className="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">Add Customer</button>
+               {customerError && (
+                 <div className="mb-2 p-2 bg-red-900/30 border border-red-700 rounded">
+                   <p className="text-red-400 text-sm flex items-center gap-1">
+                     <AlertTriangle className="w-4 h-4" />
+                     {customerError}
+                   </p>
+                 </div>
+               )}
+                <button 
+                  onClick={handleAddCustomer}
+                  disabled={isCreatingCustomer}
+                  className="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreatingCustomer ? "Creating..." : "Add Customer"}
+                </button>
             </div>
           )}
           <div className="flex-1 overflow-y-auto max-h-64">
@@ -982,7 +1290,7 @@ const completeSale = () => {
               <h2 className="text-xl font-bold text-white">Held Orders</h2>
               <button onClick={() => setShowHeldOrders(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto max-h-64">
+<div className="flex-1 overflow-y-auto max-h-64">
               {heldOrders.length === 0 ? (
                 <p className="text-center text-gray-500 py-8 text-sm">No held orders</p>
               ) : (
@@ -991,42 +1299,42 @@ const completeSale = () => {
                     // Show orders assigned to current staff, or unassigned (legacy orders)
                     !o.assignedTo || o.assignedTo._id === currentStaff?._id
                   )
-                  .map((order) => (
-                    <div key={order.id} className="bg-neutral-700/50 p-3 rounded-lg mb-2">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="text-white font-medium text-sm">{order.customer.name}</p>
-                          <p className="text-gray-400 text-xs">{order.items.length} items • Ksh {order.total.toFixed(2)}</p>
-                          {order.assignedTo && (
-                            <p className="text-blue-400 text-xs mt-1">
-                              Assigned to: {order.assignedTo.name}
-                            </p>
-                          )}
-                        </div>
-                        {currentStaff && order.assignedTo && order.assignedTo._id !== currentStaff._id && (
-                          <button
-                            onClick={() => openHandoverFromStaff(order.assignedTo!)}
-                            title="Transfer this order"
-                            className="p-1 text-green-400 hover:text-green-300"
-                          >
-                            <ArrowRightLeft className="w-4 h-4" />
-               </button>
-
-                        )}
-                      </div>
-                      <button 
-                        onClick={() => resumeOrder(order)} 
-                        className="w-full mt-2 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+.map((order) => (
+                      <label
+                        key={order._id || order.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                          selectedOrderIds.includes(order._id || order.id)
+                            ? "bg-blue-500/20 border-blue-500"
+                            : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
+                        }`}
                       >
-                        Resume
-                      </button>
-                    </div>
-                  ))
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.includes(order._id || order.id)}
+                          onChange={(e) =>
+                            setSelectedOrderIds(
+                              e.target.checked
+                                ? [...selectedOrderIds, order._id || order.id]
+                                : selectedOrderIds.filter(id => id !== (order._id || order.id))
+                            )
+                          }
+                          className="w-4 h-4 rounded border-gray-300"
+                        />
+                        <div className="flex-1">
+                          <p className="text-white text-sm font-medium">
+                            {order.customer.name} - {order.items.length} items
+                          </p>
+                          <p className="text-gray-400 text-xs">
+                            Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      </label>
+                    ))
               )}
+</div>
             </div>
-           </div>
-         </div>
-       )}
+          </div>
+        )}
 
       {/* Payment Modal */}
      {billedOrder && showChangeInput && (
@@ -1055,8 +1363,8 @@ const completeSale = () => {
                </div>
              </>
            )}
-           <div className="flex gap-2">
-             <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg text-sm">Cancel</button>
+<div className="flex gap-2">
+              <button onClick={() => { setShowChangeInput(false); setBilledOrder(null); setChangeAmount(""); }} className="flex-1 py-3 bg-neutral-700 text-white rounded-lg text-sm">Cancel</button>
              {paymentMethod === "account" ? (
                <button onClick={completeSale} className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 text-sm"><CheckCircle className="w-5 h-5" /> Charge to Account</button>
              ) : (
@@ -1099,16 +1407,16 @@ const completeSale = () => {
               Currently signed in as: <span className="text-white font-medium">{currentStaff?.name}</span>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {staffList.map((staff) => (
-                <button
-                  key={staff._id}
-                  onClick={() => handleSwitchStaff(staff)}
-                  className={`w-full text-left p-3 rounded-lg mb-2 flex items-center gap-3 ${
-                    currentStaff?._id === staff._id
-                      ? "bg-blue-500/20 border border-blue-500"
-                      : "bg-neutral-700 hover:bg-neutral-600"
-                  }`}
-                >
+               {staffList.map((staff) => (
+                 <button
+                   key={staff._id}
+                   onClick={() => initiateSwitchStaff(staff)}
+                   className={`w-full text-left p-3 rounded-lg mb-2 flex items-center gap-3 ${
+                     currentStaff?._id === staff._id
+                       ? "bg-blue-500/20 border border-blue-500"
+                       : "bg-neutral-700 hover:bg-neutral-600"
+                   }`}
+                 >
                   <div className="w-10 h-10 rounded-full bg-neutral-600 flex items-center justify-center text-lg font-bold text-white">
                     {staff.name.charAt(0).toUpperCase()}
                   </div>
@@ -1122,6 +1430,75 @@ const completeSale = () => {
                 </button>
               ))}
             </div>
+          </div>
+         </div>
+       )}
+
+      {/* Staff PIN Verification Modal */}
+      {showStaffPinModal && selectedStaffForSwitch && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-800 rounded-xl border border-neutral-700 w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Enter PIN</h2>
+              <button
+                onClick={() => {
+                  setShowStaffPinModal(false);
+                  setSelectedStaffForSwitch(null);
+                  setStaffPinInput("");
+                  setStaffPinError("");
+                }}
+                className="p-2 text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-gray-400 text-sm mb-4">
+              Enter the 4-digit PIN for <span className="text-white font-medium">{selectedStaffForSwitch.name}</span> to switch users.
+            </p>
+
+            {staffPinError && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
+                {staffPinError}
+              </div>
+            )}
+
+            <form onSubmit={verifyStaffPin}>
+              <div className="mb-6">
+                <label className="block text-gray-300 text-sm mb-2">Staff PIN</label>
+                <input
+                  type="password"
+                  value={staffPinInput}
+                  onChange={(e) => setStaffPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="••••"
+                  maxLength={4}
+                  className="w-full bg-neutral-700 text-white px-4 py-3 rounded-lg border border-neutral-600 focus:outline-none focus:border-blue-500 font-mono text-2xl text-center tracking-widest"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStaffPinModal(false);
+                    setSelectedStaffForSwitch(null);
+                    setStaffPinInput("");
+                    setStaffPinError("");
+                  }}
+                  className="flex-1 py-2.5 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600"
+                >
+                  <Lock className="w-4 h-4" />
+                  Verify & Switch
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1150,7 +1527,7 @@ const completeSale = () => {
             </div>
 
             {/* Order Selection */}
-            <div className="mb-4">
+<div className="mb-4">
               <p className="text-gray-400 text-sm mb-2">Select orders to transfer:</p>
               <div className="max-h-60 overflow-y-auto space-y-2">
                   {heldOrders
@@ -1160,37 +1537,44 @@ const completeSale = () => {
                       (o.customer._id || o.customer.id) !== undefined && 
                       o.items.length > 0
                     )
-                  .map((order) => (
-                    <label
-                      key={order.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-                        selectedOrderIds.includes(order.id)
-                          ? "bg-blue-500/20 border-blue-500"
-                          : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
-                      }`}
-                    >
-                       <input
-                         type="checkbox"
-                         checked={selectedOrderIds.includes(order.id)}
-                         onChange={(e) =>
-                           setSelectedOrderIds(
-                             e.target.checked
-                               ? [...selectedOrderIds, order.id]
-                               : selectedOrderIds.filter(id => id !== order.id)
-                           )
-                         }
-                         className="w-4 h-4 rounded border-gray-300"
-                       />
-                      <div className="flex-1">
-                        <p className="text-white text-sm font-medium">
-                          {order.customer.name} - {order.items.length} items
-                        </p>
-                        <p className="text-gray-400 text-xs">
-                          Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
-                        </p>
+                    .map((order) => (
+                      <div key={order._id || order.id} className="flex items-center gap-2 mb-2">
+                        <label
+                          className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                            selectedOrderIds.includes(order._id || order.id)
+                              ? "bg-blue-500/20 border-blue-500"
+                              : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
+                          }`}
+                        >
+                         <input
+                           type="checkbox"
+                           checked={selectedOrderIds.includes(order._id || order.id)}
+                           onChange={(e) =>
+                             setSelectedOrderIds(
+                               e.target.checked
+                                 ? [...selectedOrderIds, order._id || order.id]
+                                 : selectedOrderIds.filter(id => id !== (order._id || order.id))
+                             )
+                           }
+                           className="w-4 h-4 rounded border-gray-300"
+                         />
+                        <div className="flex-1">
+                          <p className="text-white text-sm font-medium">
+                            {order.customer.name} - {order.items.length} items
+                          </p>
+                          <p className="text-gray-400 text-xs">
+                            Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                        </label>
+                        <button
+                          onClick={() => resumeOrder(order)}
+                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                        >
+                          Resume
+                        </button>
                       </div>
-                    </label>
-                  ))}
+                    ))}
                   {heldOrders.filter(o => 
                     o.assignedTo && 
                     o.assignedTo._id === handoverFrom._id && 
@@ -1240,9 +1624,9 @@ const completeSale = () => {
                      o.assignedTo._id === handoverFrom._id && 
                      (o.customer._id || o.customer.id) !== undefined && 
                      o.items.length > 0
-                   )
-                  .map(o => o.id)
-                  .filter(Boolean) as string[];
+)
+                    .map(o => o._id || o.id)
+                    .filter(Boolean) as string[];
                 setSelectedOrderIds(allOrderIds);
               }}
               className="w-full py-2 mb-3 bg-neutral-700 text-gray-300 rounded text-sm hover:bg-neutral-600"
@@ -1270,8 +1654,8 @@ const completeSale = () => {
              // Refresh page or fetch new data after shift close
              window.location.reload();
            }}
-         />
-       )}
-    </div>
-  );
+          />
+        )}
+      </div>
+    );
 }

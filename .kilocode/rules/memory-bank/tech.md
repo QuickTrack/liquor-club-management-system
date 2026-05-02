@@ -59,7 +59,8 @@ bun typecheck      # Run TypeScript type checking
 {
   "next": "^16.1.3", // Framework
   "react": "^19.2.3", // UI library
-  "react-dom": "^19.2.3" // React DOM
+  "react-dom": "^19.2.3", // React DOM
+  "emoji-picker-react": "^4.19.1" // Emoji picker for category icons
 }
 ```
 
@@ -96,10 +97,37 @@ bun typecheck      # Run TypeScript type checking
         ├── layout.tsx      # Root layout
         ├── page.tsx        # Home page
         ├── globals.css     # Global styles
-        └── favicon.ico     # Site icon
+        ├── favicon.ico     # Site icon
+        └── api/            # API Routes
+            ├── units/route.ts          # Unit definitions (GET, POST)
+            │   └── [id]/route.ts       # Unit CRUD (GET, PATCH, DELETE)
+            ├── suppliers/route.ts      # Supplier list & create (GET, POST)
+            │   └── [id]/route.ts       # Supplier CRUD (GET, PATCH, DELETE)
+            ├── categories/route.ts     # Category CRUD
+            ├── products/route.ts       # Product CRUD
+            ├── orders/route.ts         # Order management
+            ├── transactions/route.ts   # Financial transactions
+            └── staff/route.ts          # Staff management
 ```
 
-## Technical Constraints
+## Database Models
+
+| Model | File | Purpose |
+|-------|------|---------|
+| `User` | `src/lib/db/models.ts` | Authentication & access control |
+| `Category` | `src/lib/db/models.ts` | Product categories |
+| `Product` | `src/lib/db/models.ts` | Inventory items |
+| `ProductUOM` | `src/lib/db/models.ts` | Product unit conversions |
+| `UnitDefinition` | `src/lib/db/models/UnitDefinition.ts` | Reusable unit names (bottle, case, etc.) |
+| `Supplier` | `src/lib/db/models.ts` | Vendor/supplier records |
+| `Customer` | `src/lib/db/models.ts` | Customer accounts |
+| `Order` | `src/lib/db/models.ts` | Sales orders |
+| `Transaction` | `src/lib/db/models.ts` | Financial transactions |
+| `Staff` | `src/lib/db/models.ts` | Employee records |
+| `ShiftOpening` | `src/lib/db/models.ts` | Shift start audit |
+| `ShiftReconciliation` | `src/lib/db/models.ts` | Shift end audit |
+| `MPESATransaction` | `src/lib/db/models.ts` | M-Pesa payment logs |
+| `FailedTransaction` | `src/lib/db/models.ts` | Retry queue for failed ops |
 
 ### Starting Point
 

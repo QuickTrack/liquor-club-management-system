@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Package,
   Plus,
@@ -14,7 +14,9 @@ import {
   Hash,
   FolderTree,
   Check,
+  Smile,
 } from "lucide-react";
+import EmojiPicker from "emoji-picker-react";
 import type { ICategory } from "@/lib/db/models";
 
 interface CategoryFormData {
@@ -52,6 +54,8 @@ export default function CategoriesPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -170,24 +174,41 @@ export default function CategoriesPage() {
     setOpenMenuId(null);
   };
 
-  const toggleActive = async (category: ICategory) => {
-    try {
-      const res = await fetch(`/api/categories/${category._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !category.isActive }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to update category");
-      }
-      fetchCategories();
-    } catch (error: any) {
-      console.error("Toggle error:", error);
-      alert(error.message);
-    }
-    setOpenMenuId(null);
-  };
+   const toggleActive = async (category: ICategory) => {
+     try {
+       const res = await fetch(`/api/categories/${category._id}`, {
+         method: "PATCH",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ isActive: !category.isActive }),
+       });
+       if (!res.ok) {
+         const err = await res.json();
+         throw new Error(err.error || "Failed to update category");
+       }
+       fetchCategories();
+     } catch (error: any) {
+       console.error("Toggle error:", error);
+       alert(error.message);
+     }
+     setOpenMenuId(null);
+   };
+
+   // Close emoji picker when clicking outside
+   useEffect(() => {
+     const handleClickOutside = (event: MouseEvent) => {
+       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+         setShowEmojiPicker(false);
+       }
+     };
+
+     if (showEmojiPicker) {
+       document.addEventListener("mousedown", handleClickOutside);
+     }
+
+     return () => {
+       document.removeEventListener("mousedown", handleClickOutside);
+     };
+   }, [showEmojiPicker]);
 
   const getContrastColor = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -476,20 +497,44 @@ export default function CategoriesPage() {
                 </div>
               </div>
 
-              {/* Icon & Sort Order */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">
-                    Icon (emoji)
-                  </label>
-                  <input
-                    type="text"
-                    value={form.icon}
-                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 bg-white"
-                    placeholder="🥃"
-                  />
-                </div>
+               {/* Icon & Sort Order */}
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className="block text-sm font-medium text-neutral-700 mb-2">
+                     Icon (emoji)
+                   </label>
+                   <div className="relative" ref={emojiPickerRef}>
+                     <input
+                       type="text"
+                       value={form.icon}
+                       onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                       className="w-full px-4 py-2.5 pr-12 rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 bg-white"
+                       placeholder="🥃"
+                     />
+                     <button
+                       type="button"
+                       onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-neutral-100 transition-colors"
+                     >
+                       <Smile className="w-5 h-5 text-neutral-500" />
+                     </button>
+                     {showEmojiPicker && (
+                       <div className="absolute z-50 mt-2">
+                         <EmojiPicker
+                           onEmojiClick={(emojiData) => {
+                             setForm({ ...form, icon: emojiData.emoji });
+                             setShowEmojiPicker(false);
+                           }}
+                           theme={"light" as any}
+                           width="100%"
+                           height={350}
+                           searchPlaceHolder="Search emoji..."
+                           previewConfig={{ showPreview: false }}
+                         />
+                       </div>
+                     )}
+                   </div>
+                 </div>
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     Sort Order

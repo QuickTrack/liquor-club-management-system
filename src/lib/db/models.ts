@@ -2,6 +2,82 @@ import mongoose, { Schema, Document } from "mongoose";
 import bcrypt from "bcryptjs";
 
 // ============================================
+// FAILED TRANSACTION LOG SCHEMA
+// ============================================
+export interface IFailedTransaction extends Document {
+  transactionId: string;
+  operationType: string;
+  entityType: string;
+  payload: Record<string, any>;
+  error: {
+    message: string;
+    code?: string | number;
+    stack?: string;
+    details?: any;
+  };
+  severity: "critical" | "high" | "medium" | "low";
+  status: "pending_retry" | "retrying" | "resolved" | "archived";
+  retryCount: number;
+  firstFailedAt: Date;
+  lastAttemptedAt: Date;
+  retryAfter?: Date;
+  userId?: string;
+  sessionId?: string;
+  metadata?: Record<string, any>;
+  isPermanentFailure: boolean;
+}
+
+const FailedTransactionSchema = new Schema<IFailedTransaction>({
+  transactionId: { type: String, required: true, unique: true, index: true },
+  operationType: { type: String, required: true, index: true },
+  entityType: { type: String, required: true, index: true },
+  payload: { type: Schema.Types.Mixed, required: true },
+  error: {
+    message: { type: String, required: true },
+    code: { type: String },
+    stack: { type: String },
+    details: { type: Schema.Types.Mixed },
+  },
+  severity: {
+    type: String,
+    enum: ["critical", "high", "medium", "low"],
+    default: "high",
+    index: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending_retry", "retrying", "resolved", "archived"],
+    default: "pending_retry",
+    index: true,
+  },
+  retryCount: { type: Number, default: 0, min: 0 },
+  firstFailedAt: { type: Date, required: true, default: Date.now, index: true },
+  lastAttemptedAt: { type: Date, required: true, default: Date.now, index: true },
+  retryAfter: { type: Date, index: true },
+  userId: { type: String, index: true },
+  sessionId: { type: String, index: true },
+  metadata: { type: Schema.Types.Mixed },
+});
+
+FailedTransactionSchema.virtual("isPermanentFailure").get(function (this: any) {
+  if (this.error?.code === 11000) return true;
+  const permanentMessages = ["Validation failed", "Cast to ObjectId failed", "duplicate key error", "document failed validation"];
+  const message = (this.error?.message || "").toLowerCase();
+  return permanentMessages.some((msg: string) => message.includes(msg.toLowerCase()));
+});
+
+FailedTransactionSchema.set("toJSON", { 
+  virtuals: true, 
+  transform: (doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    delete ret.isPermanentFailure; // Virtual, already serialized if needed
+    return ret;
+  } 
+});
+FailedTransactionSchema.set("toObject", { virtuals: true });
+
+// ============================================
 // USER SCHEMA (AUTHENTICATION)
 // ============================================
 export interface IUser extends Document {
@@ -220,13 +296,28 @@ export interface IOrder extends Document {
   subtotal: number;
   tax: number;
   total: number;
-  paymentMethod: "cash" | "mpesa" | "card";
+  paymentMethod: "cash" | "mpesa" | "card" | "account" | "bank_transfer";
   status: "draft" | "held" | "billed" | "paid" | "cancelled";
   pointsEarned: number;
   assignedTo?: mongoose.Types.ObjectId; // Staff member assigned to this order
   createdAt: Date;
   heldAt?: Date;
   paidAt?: Date;
+  
+  // Payment tracking
+  payments?: mongoose.Types.ObjectId[];  // References to Payment documents
+  totalPaid?: number;                    // Sum of all completed payments
+  outstandingBalance?: number;           // total - totalPaid
+  fullyPaid?: boolean;                   // totalPaid >= total
+  
+  // Financial close
+  closed?: boolean;                      // Order is finalized, no more changes
+  closedAt?: Date;
+  closedBy?: mongoose.Types.ObjectId;   // User who closed
+  
+  // Reconciliation
+  reconciliationId?: string;             // Link to end-of-shift reconciliation
+  isReconciled?: boolean;
 }
 
 const OrderItemSchema = new Schema({
@@ -242,17 +333,32 @@ const OrderItemSchema = new Schema({
 
 const OrderSchema = new Schema<IOrder>({
   orderId: { type: String, required: true, unique: true },
-  customer: { type: Schema.Types.ObjectId, ref: "Customer", required: true },
+  customer: { type: Schema.Types.ObjectId, ref: "Customer", required: false },
   items: [OrderItemSchema],
   subtotal: { type: Number, required: true },
   tax: { type: Number, default: 0 },
   total: { type: Number, required: true },
-  paymentMethod: { type: String, enum: ["cash", "mpesa", "card"], default: "cash" },
+  paymentMethod: { type: String, enum: ["cash", "mpesa", "card", "account", "bank_transfer"], default: "cash" },
   status: { type: String, enum: ["draft", "held", "billed", "paid", "cancelled"], default: "draft" },
   pointsEarned: { type: Number, default: 0 },
   assignedTo: { type: Schema.Types.ObjectId, ref: "Staff" },
   heldAt: Date,
   paidAt: Date,
+  
+  // Payment tracking
+  payments: [{ type: Schema.Types.ObjectId, ref: "Payment" }],
+  totalPaid: { type: Number, default: 0 },
+  outstandingBalance: { type: Number, default: 0 },
+  fullyPaid: { type: Boolean, default: false },
+  
+  // Financial close
+  closed: { type: Boolean, default: false },
+  closedAt: Date,
+  closedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  
+  // Reconciliation
+  reconciliationId: String,
+  isReconciled: { type: Boolean, default: false },
 }, { timestamps: true });
 
 OrderSchema.index({ orderId: 1 }, { unique: true });
@@ -260,6 +366,241 @@ OrderSchema.index({ customer: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ assignedTo: 1 });
 OrderSchema.index({ createdAt: -1 });
+
+// ============================================
+// PAYMENT SCHEMA (FINANCIAL TRANSACTIONS)
+// ============================================
+export interface IPayment extends Document {
+  paymentId: string;                  // Unique payment identifier
+  orderId: string;                    // Reference to Order.orderId (not ObjectId)
+  orderObjectId: mongoose.Types.ObjectId;  // Reference to Order _id
+  amount: number;                     // Payment amount
+  currency: string;                   // e.g., "KES"
+  method: "cash" | "mpesa" | "card" | "account" | "bank_transfer";
+  status: "pending" | "completed" | "failed" | "refunded" | "reversed";
+  
+  // Payment method details
+  mpesaReceiptNumber?: string;
+  mpesaPhoneNumber?: string;
+  mpesaCheckoutRequestId?: string;
+  cardLast4?: string;
+  cardBrand?: string;
+  authorizationCode?: string;
+  
+  // Cash handling
+  cashTendered?: number;              // Amount given by customer
+  changeGiven?: number;               // Change returned
+  
+  metadata?: {
+    sessionId?: string;
+    terminalId?: string;
+    batchNumber?: string;
+    referenceNumber?: string;
+    notes?: string;
+  };
+  
+  // Timestamps
+  initiatedAt: Date;
+  completedAt?: Date;
+  refundedAt?: Date;
+  
+  // Audit
+  userId: mongoose.Types.ObjectId;    // Staff who processed payment
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const PaymentSchema = new Schema<IPayment>({
+  paymentId: { 
+    type: String, 
+    required: true, 
+    unique: true,
+    index: true 
+  },
+  orderId: { 
+    type: String, 
+    required: true,
+    index: true 
+  },
+  orderObjectId: { 
+    type: Schema.Types.ObjectId, 
+    ref: "Order",
+    required: true,
+    index: true 
+  },
+  amount: { 
+    type: Number, 
+    required: true,
+    min: 0 
+  },
+  currency: { 
+    type: String, 
+    default: "KES" 
+  },
+  method: { 
+    type: String, 
+    enum: ["cash", "mpesa", "card", "account", "bank_transfer"],
+    required: true,
+    index: true 
+  },
+  status: { 
+    type: String, 
+    enum: ["pending", "completed", "failed", "refunded", "reversed"],
+    default: "pending",
+    index: true 
+  },
+  
+  // M-Pesa details
+  mpesaReceiptNumber: String,
+  mpesaPhoneNumber: String,
+  mpesaCheckoutRequestId: String,
+  
+  // Card details
+  cardLast4: String,
+  cardBrand: String,
+  authorizationCode: String,
+  
+  // Cash handling
+  cashTendered: Number,
+  changeGiven: Number,
+  
+  metadata: Schema.Types.Mixed,
+  
+  // Critical: who processed this payment
+  userId: { 
+    type: Schema.Types.ObjectId, 
+    ref: "User",
+    required: true 
+  },
+  
+  // Timestamps
+  initiatedAt: { type: Date, required: true, default: Date.now },
+  completedAt: Date,
+  refundedAt: Date
+}, { 
+  timestamps: true 
+});
+
+// Compound indexes for common queries
+PaymentSchema.index({ orderId: 1, createdAt: -1 });
+PaymentSchema.index({ method: 1, status: 1 });
+PaymentSchema.index({ "metadata.sessionId": 1 });
+PaymentSchema.index({ createdAt: -1 });
+
+// ============================================
+// SHIFT RECONCILIATION SCHEMA
+// ============================================
+export interface IShiftReconciliation extends Document {
+  reconciliationId: string;
+  branchId?: string;
+  userId: mongoose.Types.ObjectId;    // Staff closing shift
+  shift: "Morning" | "Evening" | "Night";
+  
+  // Time window
+  startTime: Date;                    // Start of shift (or last reconciliation)
+  endTime: Date;                      // Current time
+  
+  // Order aggregates
+  totalOrders: number;
+  totalSales: number;
+  totalTax: number;
+  totalRefunds: number;
+  
+  // Payment method breakdown
+  cashReceived: number;
+  cashInDrawer: number;               // Actual cash count
+  cashVariance: number;               // Difference
+  
+  mpesaReceived: number;
+  cardReceived: number;
+  accountReceived: number;            // Credit sales
+  
+  // Inventory metrics
+  itemsSold: number;
+  categoriesSold: Record<string, number>; // category -> count
+  
+  // References
+  orderIds: string[];                 // Orders closed in this period
+  paymentIds: string[];               // Payments processed
+  inventoryTransactionIds: string[];  // Stock movements
+  
+  // Cash handling
+  startingFloat: number;
+  endingFloat: number;
+  cashDrop: number;                   // Removed from drawer
+  
+  // Status
+  status: "open" | "closed" | "reconciled";
+  notes?: string;
+  
+  // Audit
+  closedAt: Date;
+  closedBy: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const ShiftReconciliationSchema = new Schema<IShiftReconciliation>({
+  reconciliationId: { 
+    type: String, 
+    required: true, 
+    unique: true,
+    index: true 
+  },
+  branchId: String,
+  userId: { 
+    type: Schema.Types.ObjectId, 
+    ref: "User",
+    required: true 
+  },
+  shift: { 
+    type: String, 
+    enum: ["Morning", "Evening", "Night"],
+    required: true 
+  },
+  startTime: { type: Date, required: true },
+  endTime: { type: Date, required: true },
+  
+  totalOrders: { type: Number, default: 0 },
+  totalSales: { type: Number, default: 0 },
+  totalTax: { type: Number, default: 0 },
+  totalRefunds: { type: Number, default: 0 },
+  
+  cashReceived: { type: Number, default: 0 },
+  cashInDrawer: { type: Number, default: 0 },
+  cashVariance: { type: Number, default: 0 },
+  
+  mpesaReceived: { type: Number, default: 0 },
+  cardReceived: { type: Number, default: 0 },
+  accountReceived: { type: Number, default: 0 },
+  
+  itemsSold: { type: Number, default: 0 },
+  categoriesSold: { type: Schema.Types.Mixed, default: {} },
+  
+  orderIds: [{ type: String }],
+  paymentIds: [{ type: String }],
+  inventoryTransactionIds: [{ type: String }],
+  
+  startingFloat: { type: Number, default: 0 },
+  endingFloat: { type: Number, default: 0 },
+  cashDrop: { type: Number, default: 0 },
+  
+  status: { 
+    type: String, 
+    enum: ["open", "closed", "reconciled"],
+    default: "open" 
+  },
+  notes: String,
+  
+  closedAt: Date,
+  closedBy: { type: Schema.Types.ObjectId, ref: "User" }
+}, { 
+  timestamps: true 
+});
+
+ShiftReconciliationSchema.index({ userId: 1, status: 1 });
+ShiftReconciliationSchema.index({ startTime: -1 });
+ShiftReconciliationSchema.index({ reconciliationId: 1 });
 
 // ============================================
 // STAFF SCHEMA
@@ -520,7 +861,116 @@ const HappyHourSchema = new Schema<IHappyHour>({
   endTime: { type: String, required: true },
   discount: { type: Number, required: true },
   isActive: { type: Boolean, default: true },
-}, { timestamps: true });
+ }, { timestamps: true });
+
+// ============================================
+// SHIFT OPENING SCHEMA (CASHIER LOGIN INTAKE)
+// ============================================
+ export interface IShiftOpening extends Document {
+   openingId: string;
+   cashier: mongoose.Types.ObjectId;      // Staff who opened the shift
+   shift: "Morning" | "Evening" | "Night";
+   startTime: Date;
+   endTime?: Date;                         // Set when shift closes
+
+   // Financial opening balances
+   openingCashFloat: number;               // Cash float at shift start
+   openingMpesaBalance: number;            // M-Pesa balance at shift start
+
+    // Stock verification checklist
+    stockChecklist: {
+      productId: mongoose.Types.ObjectId;
+      productName: string;
+      category: string;
+      unit: string;                    // Base unit (system unit)
+      systemQuantity: number;          // Expected stock in base units
+      physicalCount: number;           // Counted quantity (already converted to base units). If verification deferred, assumed equal to systemQuantity.
+      physicalUnit: string;            // Unit used during physical count (e.g., "cases", "bottles")
+      conversionFactor: number;        // Multiplier to convert from physicalUnit to baseUnit
+      discrepancy: number;             // physicalCount (converted) - systemQuantity
+      notes?: string;
+    }[];
+
+   // Discrepancy summary
+   totalDiscrepancies: number;
+   totalMissingValue: number;              // Value of missing items
+
+   // Authentication
+   cashierSignature: string;               // Typed name or digital signature
+   confirmedAt: Date;
+
+   // Status
+   status: "open" | "closed";
+
+   // Deferral tracking
+   checklistDeferred: boolean;             // True if stock verification was deferred using "Remind Me Later"
+   deferredAt?: Date;                      // When the deferral occurred
+   deferredUntil?: Date;                   // When the reminder should trigger
+
+   // Audit
+   createdAt: Date;
+   updatedAt: Date;
+ }
+
+ const ShiftOpeningSchema = new Schema<IShiftOpening>({
+   openingId: { type: String, required: true, unique: true, index: true },
+   cashier: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
+   shift: { type: String, enum: ["Morning", "Evening", "Night"], required: true },
+   startTime: { type: Date, required: true, default: Date.now },
+   endTime: Date,
+
+   // Financial opening balances
+   openingCashFloat: { type: Number, required: true, min: 0 },
+   openingMpesaBalance: { type: Number, required: true, min: 0 },
+
+    // Stock verification checklist
+    stockChecklist: [
+      {
+        productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+        productName: { type: String, required: true },
+        category: { type: String, required: true },
+        unit: { type: String, required: true }, // Base unit
+        systemQuantity: { type: Number, required: true, min: 0 },
+        physicalCount: { type: Number, required: true, min: 0 }, // In base units after conversion
+        physicalUnit: { type: String, required: true }, // Unit used during count
+        conversionFactor: { type: Number, required: true, min: 0.01 },
+        discrepancy: { type: Number, default: 0 },
+        notes: String,
+      },
+    ],
+
+   // Discrepancy summary
+   totalDiscrepancies: { type: Number, default: 0 },
+   totalMissingValue: { type: Number, default: 0 },
+
+   // Authentication
+   cashierSignature: { type: String, required: true },
+   confirmedAt: { type: Date, required: true, default: Date.now },
+
+   // Status
+   status: { type: String, enum: ["open", "closed"], default: "open" },
+
+    // Deferral tracking
+    checklistDeferred: { type: Boolean, default: false },
+    deferredAt: { type: Date },
+    deferredUntil: { type: Date },
+
+   // Audit
+   createdAt: { type: Date, default: Date.now },
+   updatedAt: { type: Date, default: Date.now },
+ });
+
+// Generate openingId
+ShiftOpeningSchema.pre("save", async function () {
+  if (!this.openingId) {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    this.openingId = `SO-${timestamp}-${random}`;
+  }
+});
+
+ShiftOpeningSchema.index({ cashier: 1, startTime: -1 });
+ShiftOpeningSchema.index({ shift: 1, status: 1 });
 
 // ============================================
 // EXPORT MODELS
@@ -531,6 +981,7 @@ export const Customer = mongoose.models.Customer || mongoose.model<ICustomer>("C
 export const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
 export const ProductUOM = mongoose.models.ProductUOM || mongoose.model<IProductUOM>("ProductUOM", ProductUOMSchema);
 export const Order = mongoose.models.Order || mongoose.model<IOrder>("Order", OrderSchema);
+export const Payment = mongoose.models.Payment || mongoose.model<IPayment>("Payment", PaymentSchema);
 export const Staff = mongoose.models.Staff || mongoose.model<IStaff>("Staff", StaffSchema);
 export const Supplier = mongoose.models.Supplier || mongoose.model<ISupplier>("Supplier", SupplierSchema);
 export const Recipe = mongoose.models.Recipe || mongoose.model<IRecipe>("Recipe", RecipeSchema);
@@ -540,22 +991,6 @@ export const AuditLog = mongoose.models.AuditLog || mongoose.model<IAuditLog>("A
 export const ExciseDuty = mongoose.models.ExciseDuty || mongoose.model<IExciseDuty>("ExciseDuty", ExciseDutySchema);
 export const HappyHour = mongoose.models.HappyHour || mongoose.model<IHappyHour>("HappyHour", HappyHourSchema);
 export const MPESATransaction = mongoose.models.MPESATransaction || mongoose.model<IMPESATransaction>("MPESATransaction", MPESATransactionSchema);
-
-// Export all schemas for reference
-export const schemas = {
-  User: UserSchema,
-  Category: CategorySchema,
-  Customer: CustomerSchema,
-  Product: ProductSchema,
-  ProductUOM: ProductUOMSchema,
-  Order: OrderSchema,
-  Staff: StaffSchema,
-  Supplier: SupplierSchema,
-  Recipe: RecipeSchema,
-  Transaction: TransactionSchema,
-  License: LicenseSchema,
-  AuditLog: AuditLogSchema,
-  ExciseDuty: ExciseDutySchema,
-  HappyHour: HappyHourSchema,
-  MPESATransaction: MPESATransactionSchema,
-};
+export const FailedTransaction = mongoose.models.FailedTransaction || mongoose.model<IFailedTransaction>("FailedTransaction", FailedTransactionSchema);
+export const ShiftReconciliation = mongoose.models.ShiftReconciliation || mongoose.model<IShiftReconciliation>("ShiftReconciliation", ShiftReconciliationSchema);
+export const ShiftOpening = mongoose.models.ShiftOpening || mongoose.model<IShiftOpening>("ShiftOpening", ShiftOpeningSchema);
