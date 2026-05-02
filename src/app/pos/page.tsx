@@ -747,6 +747,11 @@ export default function POSPage() {
   };
 
   const resumeOrder = async (order: Order) => {
+    // Prevent resuming if there's already an active order with items
+    if (currentOrder.items.length > 0) {
+      alert("Please complete or clear the current order before resuming another.");
+      return;
+    }
     setCurrentOrder({ ...order, status: "draft", createdAt: new Date().toISOString() });
     setHeldOrders(heldOrders.filter((o) => o.id !== order.id));
     setShowHeldOrders(false);
@@ -1331,7 +1336,8 @@ export default function POSPage() {
                         </label>
                         <button
                           onClick={() => resumeOrder(order)}
-                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                          disabled={currentOrder.items.length > 0}
+                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Resume
                         </button>
@@ -1576,7 +1582,8 @@ export default function POSPage() {
                         </label>
                         <button
                           onClick={() => resumeOrder(order)}
-                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                          disabled={currentOrder.items.length > 0}
+                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Resume
                         </button>
