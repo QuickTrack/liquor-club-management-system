@@ -1296,15 +1296,15 @@ export default function POSPage() {
               <button onClick={() => setShowHeldOrders(false)}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
 <div className="flex-1 overflow-y-auto max-h-64">
-              {heldOrders.length === 0 ? (
-                <p className="text-center text-gray-500 py-8 text-sm">No held orders</p>
-              ) : (
-                heldOrders
-                  .filter(o => 
-                    // Show orders assigned to current staff, or unassigned (legacy orders)
-                    !o.assignedTo || o.assignedTo._id === currentStaff?._id
-                  )
-.map((order) => (
+                {heldOrders.length === 0 ? (
+                  <p className="text-center text-gray-500 py-8 text-sm">No held orders</p>
+                ) : (
+                  heldOrders
+                    .filter(o => 
+                      // Show orders assigned to current staff, or unassigned (legacy orders)
+                      !o.assignedTo || o.assignedTo._id === currentStaff?._id
+                    )
+                    .map((order) => (
                       <div key={order._id || order.id} className="flex items-center gap-2">
                         <div className="flex-1 flex items-center gap-3 p-3 rounded-lg border bg-neutral-700 border-neutral-600">
                           <div className="flex-1">
@@ -1325,8 +1325,8 @@ export default function POSPage() {
                         </button>
                       </div>
                     ))
-              )}
-</div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1521,38 +1521,38 @@ export default function POSPage() {
               </div>
             </div>
 
-            {/* Order Selection */}
-<div className="mb-4">
+{/* Order Selection */}
+            <div className="mb-4">
               <p className="text-gray-400 text-sm mb-2">Select orders to transfer:</p>
               <div className="max-h-60 overflow-y-auto space-y-2">
-                  {heldOrders
-                    .filter(o => 
-                      o.assignedTo && 
-                      o.assignedTo._id === handoverFrom._id && 
-                      (o.customer._id || o.customer.id) !== undefined && 
-                      o.items.length > 0
-                    )
-                    .map((order) => (
-                      <div key={order._id || order.id} className="flex items-center gap-2 mb-2">
-                        <label
-                          className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-                            selectedOrderIds.includes(order._id || order.id)
-                              ? "bg-blue-500/20 border-blue-500"
-                              : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
-                          }`}
-                        >
-                         <input
-                           type="checkbox"
-                           checked={selectedOrderIds.includes(order._id || order.id)}
-                           onChange={(e) =>
-                             setSelectedOrderIds(
-                               e.target.checked
-                                 ? [...selectedOrderIds, order._id || order.id]
-                                 : selectedOrderIds.filter(id => id !== (order._id || order.id))
-                             )
-                           }
-                           className="w-4 h-4 rounded border-gray-300"
-                         />
+                {heldOrders
+                  .filter(o => 
+                    o.assignedTo && 
+                    o.assignedTo._id === handoverFrom._id && 
+                    (o.customer._id || o.customer.id) !== undefined && 
+                    o.items.length > 0
+                  )
+                  .map((order) => (
+                    <div key={order._id || order.id} className="flex items-center gap-2 mb-2">
+                      <label
+                        className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                          selectedOrderIds.includes(order._id || order.id)
+                            ? "bg-blue-500/20 border-blue-500"
+                            : "bg-neutral-700 border-neutral-600 hover:bg-neutral-600"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.includes(order._id || order.id)}
+                          onChange={(e) =>
+                            setSelectedOrderIds(
+                              e.target.checked
+                                ? [...selectedOrderIds, order._id || order.id]
+                                : selectedOrderIds.filter(id => id !== (order._id || order.id))
+                            )
+                          }
+                          className="w-4 h-4 rounded border-gray-300"
+                        />
                         <div className="flex-1">
                           <p className="text-white text-sm font-medium">
                             {order.customer.name} - {order.items.length} items
@@ -1561,16 +1561,16 @@ export default function POSPage() {
                             Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
                           </p>
                         </div>
-                        </label>
-                        <button
-                          onClick={() => resumeOrder(order)}
-                          disabled={currentOrder.items.length > 0}
-                          className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Resume
-                        </button>
-                      </div>
-                    ))}
+                      </label>
+                      <button
+                        onClick={() => resumeOrder(order)}
+                        disabled={currentOrder.items.length > 0}
+                        className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Resume
+                      </button>
+                    </div>
+                  ))}
                   {heldOrders.filter(o => 
                     o.assignedTo && 
                     o.assignedTo._id === handoverFrom._id && 
