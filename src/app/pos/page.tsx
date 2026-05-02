@@ -1275,14 +1275,14 @@ export default function POSPage() {
                 </button>
             </div>
           )}
-          <div className="flex-1 overflow-y-auto max-h-64">
-            {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map((customer) => (
-              <button key={customer._id || customer.id} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2.5 hover:bg-neutral-700 rounded-lg mb-1">
-                <p className="text-white text-sm">{customer.name}</p>
-                <p className="text-gray-400 text-sm">{customer.phone}</p>
-              </button>
-            ))}
-          </div>
+<div className="flex-1 overflow-y-auto max-h-64">
+                {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).map((customer, idx) => (
+                  <button key={customer._id || customer.id || customer.name || `customer-${idx}`} onClick={() => { updatePricesWithCustomer(customer); setShowCustomerSelect(false); }} className="w-full text-left p-2.5 hover:bg-neutral-700 rounded-lg mb-1">
+                    <p className="text-white text-sm">{customer.name}</p>
+                    <p className="text-gray-400 text-sm">{customer.phone}</p>
+                  </button>
+                ))}
+              </div>
         </div>
       </div>
     )}
@@ -1304,8 +1304,8 @@ export default function POSPage() {
                       // Show orders assigned to current staff, or unassigned (legacy orders)
                       !o.assignedTo || o.assignedTo._id === currentStaff?._id
                     )
-                    .map((order) => (
-                      <div key={order._id || order.id} className="flex items-center gap-2">
+                    .map((order, idx) => (
+                      <div key={order._id || order.id || `order-${idx}`} className="flex items-center gap-2">
                         <div className="flex-1 flex items-center gap-3 p-3 rounded-lg border bg-neutral-700 border-neutral-600">
                           <div className="flex-1">
                             <p className="text-white text-sm font-medium">
@@ -1401,30 +1401,30 @@ export default function POSPage() {
             <div className="mb-2 text-sm text-gray-400">
               Currently signed in as: <span className="text-white font-medium">{currentStaff?.name}</span>
             </div>
-            <div className="max-h-64 overflow-y-auto">
-               {staffList.map((staff) => (
-                 <button
-                   key={staff._id}
-                   onClick={() => initiateSwitchStaff(staff)}
-                   className={`w-full text-left p-3 rounded-lg mb-2 flex items-center gap-3 ${
-                     currentStaff?._id === staff._id
-                       ? "bg-blue-500/20 border border-blue-500"
-                       : "bg-neutral-700 hover:bg-neutral-600"
-                   }`}
-                 >
-                  <div className="w-10 h-10 rounded-full bg-neutral-600 flex items-center justify-center text-lg font-bold text-white">
-                    {staff.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{staff.name}</p>
-                    <p className="text-gray-400 text-sm truncate">{staff.role} • {staff.phone}</p>
-                  </div>
-                  {currentStaff?._id === staff._id && (
-                    <User className="w-5 h-5 text-blue-400" />
-                  )}
-                </button>
-              ))}
-            </div>
+<div className="max-h-64 overflow-y-auto">
+               {staffList.map((staff, idx) => (
+                  <button
+                    key={staff._id || idx}
+                    onClick={() => initiateSwitchStaff(staff)}
+                    className={`w-full text-left p-3 rounded-lg mb-2 flex items-center gap-3 ${
+                      currentStaff?._id === staff._id
+                        ? "bg-blue-500/20 border border-blue-500"
+                        : "bg-neutral-700 hover:bg-neutral-600"
+                    }`}
+                  >
+                   <div className="w-10 h-10 rounded-full bg-neutral-600 flex items-center justify-center text-lg font-bold text-white">
+                     {staff.name.charAt(0).toUpperCase()}
+                   </div>
+                   <div className="flex-1 min-w-0">
+                     <p className="text-white font-medium truncate">{staff.name}</p>
+                     <p className="text-gray-400 text-sm truncate">{staff.role} • {staff.phone}</p>
+                   </div>
+                   {currentStaff?._id === staff._id && (
+                     <User className="w-5 h-5 text-blue-400" />
+                   )}
+                 </button>
+               ))}
+             </div>
           </div>
          </div>
        )}
@@ -1532,8 +1532,8 @@ export default function POSPage() {
                     (o.customer._id || o.customer.id) !== undefined && 
                     o.items.length > 0
                   )
-                  .map((order) => (
-                    <div key={order._id || order.id} className="flex items-center gap-2 mb-2">
+                  .map((order, idx) => (
+                    <div key={order._id || order.id || `transfer-${idx}`} className="flex items-center gap-2 mb-2">
                       <label
                         className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
                           selectedOrderIds.includes(order._id || order.id)
@@ -1588,9 +1588,9 @@ export default function POSPage() {
               <div className="max-h-40 overflow-y-auto space-y-2">
                 {staffList
                   .filter(s => s._id !== handoverFrom._id)
-                  .map((staff) => (
+                  .map((staff, idx) => (
                     <button
-                      key={staff._id}
+                      key={staff._id || idx}
                       onClick={() => handleHandover(staff)}
                       disabled={selectedOrderIds.length === 0}
                       className="w-full flex items-center gap-3 p-3 rounded-lg bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed"

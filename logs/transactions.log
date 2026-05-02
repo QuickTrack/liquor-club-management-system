@@ -106,3 +106,6 @@
 {"attempt":1,"level":"info","message":"transaction_started","operation":"create_order_with_inventory","service":"transactions","timestamp":"2026-05-02T11:41:39.614Z","transactionId":"tx_moo9u6xq_m26su3","userId":"69efb9df17b027fd9275536a"}
 {"level":"warn","message":"MongoDB not running as replica set - transactions disabled for tx_moo9u6xq_m26su3","service":"transactions","timestamp":"2026-05-02 14:41:39"}
 {"durationMs":17,"level":"info","message":"Order created successfully","orderId":"ORD-1777722099615IJ3R","service":"transactions","timestamp":"2026-05-02 14:41:39","total":300,"transactionId":"tx_moo9u6xq_m26su3","userId":"69efb9df17b027fd9275536a"}
+{"level":"warn","message":"MongoDB not running as replica set - using best effort for tx_1777722382532_qkyz","service":"transactions","timestamp":"2026-05-02 14:46:22"}
+{"amount":300,"level":"info","message":"payment_processed","orderId":"ORD-1777722099615IJ3R","paymentId":"PAY-1777722382537-7JSPI","service":"transactions","timestamp":"2026-05-02T11:46:22.568Z","transactionId":"tx_1777722382532_qkyz","userId":"69efb9df17b027fd9275536a"}
+{"amount":300,"level":"info","message":"Payment processed successfully","method":"cash","orderId":"ORD-1777722099615IJ3R","paymentId":"PAY-1777722382537-7JSPI","service":"transactions","timestamp":"2026-05-02 14:46:22","userId":"69efb9df17b027fd9275536a"}
