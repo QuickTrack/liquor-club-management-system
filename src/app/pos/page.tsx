@@ -164,23 +164,28 @@ export default function POSPage() {
   const incrementButtonRef = useRef<HTMLButtonElement>(null);
   const focusedItemId = useRef<string | null>(null);
 
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "account">("cash");
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [showCustomerSelect, setShowCustomerSelect] = useState(false);
-  const [showHeldOrders, setShowHeldOrders] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [billedOrder, setBilledOrder] = useState<Order | null>(null);
-  const [changeAmount, setChangeAmount] = useState("");
-  const [showChangeInput, setShowChangeInput] = useState(false);
-  const [showNewCustomer, setShowNewCustomer] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    tier: "Bronze" as "Bronze" | "Silver" | "Gold" | "VIP",
-  });
-    const [customerError, setCustomerError] = useState<string>("");
-    const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+const [paymentMethod, setPaymentMethod] = useState<"cash" | "mpesa" | "account">("cash");
+   const [showReceipt, setShowReceipt] = useState(false);
+   const [showCustomerSelect, setShowCustomerSelect] = useState(false);
+   const [showHeldOrders, setShowHeldOrders] = useState(false);
+   const [customerSearch, setCustomerSearch] = useState("");
+   const [billedOrder, setBilledOrder] = useState<Order | null>(null);
+   const [changeAmount, setChangeAmount] = useState("");
+   const [showChangeInput, setShowChangeInput] = useState(false);
+   const [showNewCustomer, setShowNewCustomer] = useState(false);
+   const [newCustomer, setNewCustomer] = useState({
+     name: "",
+     phone: "",
+     email: "",
+     tier: "Bronze" as "Bronze" | "Silver" | "Gold" | "VIP",
+   });
+     const [customerError, setCustomerError] = useState<string>("");
+     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
+   
+   // Customer with held order workflow state
+   const [showHeldOrderDialog, setShowHeldOrderDialog] = useState(false);
+   const [pendingCustomerWithHeldOrder, setPendingCustomerWithHeldOrder] = useState<Customer | null>(null);
+   const [heldOrderForCustomer, setHeldOrderForCustomer] = useState<Order | null>(null);
 
    // Staff assignment states
    const [currentStaff, setCurrentStaff] = useState<StaffMember | null>(null);
@@ -449,8 +454,26 @@ export default function POSPage() {
     return result;
   }, [products, searchTerm, activeCategory]);
 
-     const updatePricesWithCustomer = (customer: Customer) => {
-       const newItems = currentOrder.items.map((item) => {
+const updatePricesWithCustomer = (customer: Customer) => {
+        // Check if customer has a held order
+        const heldOrderForCustomer = heldOrders.find(
+          o => (o.customer._id === customer._id || o.customer.id === customer.id)
+        );
+        
+        if (heldOrderForCustomer && currentOrder.items.length === 0) {
+          // Show dialog for resume/start new decision
+          setPendingCustomerWithHeldOrder(customer);
+          setHeldOrderForCustomer(heldOrderForCustomer);
+          setShowHeldOrderDialog(true);
+          return;
+        }
+        
+        // Proceed with normal customer selection (no held order or has active items)
+        proceedWithCustomerSelection(customer);
+      };
+      
+      const proceedWithCustomerSelection = (customer: Customer) => {
+        const newItems = currentOrder.items.map((item) => {
          const product = products.find((p) => p.id === item.id);
          if (!product) return item;
 
@@ -493,6 +516,31 @@ export default function POSPage() {
           tax, 
           total: grossSubtotal 
         });
+};
+      
+      // Resume existing held order for the customer
+      const resumeExistingOrder = (order: Order) => {
+        if (currentOrder.items.length > 0) {
+          alert("Please complete or clear the current order before resuming another.");
+          return;
+        }
+        setHeldOrders(prev => prev.filter(o => o.id !== order.id));
+        setCurrentOrder({
+          ...order,
+          status: "draft",
+          createdAt: new Date().toISOString()
+        });
+        setShowHeldOrderDialog(false);
+        setPendingCustomerWithHeldOrder(null);
+        setHeldOrderForCustomer(null);
+      };
+      
+      // Start a new order, keeping the held order in database
+      const startNewOrder = (customer: Customer) => {
+        proceedWithCustomerSelection(customer);
+        setShowHeldOrderDialog(false);
+        setPendingCustomerWithHeldOrder(null);
+        setHeldOrderForCustomer(null);
       };
 
    const handleAddCustomer = async () => {
@@ -1285,7 +1333,39 @@ export default function POSPage() {
               </div>
         </div>
       </div>
-    )}
+     )}
+
+      {/* Held Order Decision Dialog */}
+      {showHeldOrderDialog && pendingCustomerWithHeldOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-neutral-800 rounded-xl p-6 w-96 border border-neutral-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Existing Held Order</h2>
+              <button onClick={() => setShowHeldOrderDialog(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="mb-4">
+              <p className="text-gray-300 text-sm mb-3">
+                Customer <span className="text-white font-medium">{pendingCustomerWithHeldOrder.name}</span> has a held order with {heldOrderForCustomer?.items.length || 0} items.
+              </p>
+              <p className="text-gray-400 text-xs mb-4">Total: Ksh {heldOrderForCustomer?.total.toFixed(2) || "0.00"}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => resumeExistingOrder(heldOrderForCustomer!)}
+                  className="flex-1 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+                >
+                  Resume Existing Order
+                </button>
+                <button
+                  onClick={() => startNewOrder(pendingCustomerWithHeldOrder)}
+                  className="flex-1 py-3 bg-neutral-700 text-gray-300 rounded-lg hover:bg-neutral-600 font-medium"
+                >
+                  Start New Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Held Orders Modal */}
       {showHeldOrders && (
