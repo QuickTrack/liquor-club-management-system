@@ -188,7 +188,6 @@ export function validateWithSchema<T>(
     return { isValid: true, data: validated, errors: [] };
   } catch (error) {
     if (error instanceof ZodError) {
-      console.error("Zod validation error:", error.issues);
       return {
         isValid: false,
         errors: (error.issues || []).map((issue: any) => ({
