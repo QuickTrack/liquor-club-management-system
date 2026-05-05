@@ -955,7 +955,7 @@ export default function POSPage() {
     try {
       const ordersToTransfer = selectedOrderIds.length > 0
         ? selectedOrderIds
-          : heldOrders.filter(o => (o.customer._id || o.customer.id) !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o._id || o.id).filter(Boolean);
+          : heldOrders.filter(o => (o.customer?._id || o.customer?.id) !== undefined && o.items.length > 0 && o.assignedTo?._id === handoverFrom._id).map(o => o._id || o.id).filter(Boolean);
 
       if (ordersToTransfer.length === 0) {
         alert("No orders to transfer");
@@ -1309,7 +1309,7 @@ export default function POSPage() {
                         <div className="flex-1 flex items-center gap-3 p-3 rounded-lg border bg-neutral-700 border-neutral-600">
                           <div className="flex-1">
                             <p className="text-white text-sm font-medium">
-                              {order.customer.name} - {order.items.length} items
+                              {order.customer?.name ?? 'Unknown Customer'} - {order.items.length} items
                             </p>
                             <p className="text-gray-400 text-xs">
                               Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
@@ -1529,7 +1529,7 @@ export default function POSPage() {
                   .filter(o => 
                     o.assignedTo && 
                     o.assignedTo._id === handoverFrom._id && 
-                    (o.customer._id || o.customer.id) !== undefined && 
+                    (o.customer?._id || o.customer?.id) !== undefined && 
                     o.items.length > 0
                   )
                   .map((order) => (
@@ -1555,7 +1555,7 @@ export default function POSPage() {
                         />
                         <div className="flex-1">
                           <p className="text-white text-sm font-medium">
-                            {order.customer.name} - {order.items.length} items
+                            {order.customer?.name ?? 'Unknown Customer'} - {order.items.length} items
                           </p>
                           <p className="text-gray-400 text-xs">
                             Total: Ksh {order.total.toFixed(2)} • {new Date(order.createdAt).toLocaleTimeString()}
@@ -1574,7 +1574,7 @@ export default function POSPage() {
                   {heldOrders.filter(o => 
                     o.assignedTo && 
                     o.assignedTo._id === handoverFrom._id && 
-                    (o.customer._id || o.customer.id) !== undefined && 
+                    (o.customer?._id || o.customer?.id) !== undefined && 
                     o.items.length > 0
                   ).length === 0 && (
                     <p className="text-center text-gray-500 py-4">No held orders to transfer from {handoverFrom.name}</p>
@@ -1618,7 +1618,7 @@ export default function POSPage() {
                    .filter(o => 
                      o.assignedTo && 
                      o.assignedTo._id === handoverFrom._id && 
-                     (o.customer._id || o.customer.id) !== undefined && 
+                    (o.customer?._id || o.customer?.id) !== undefined && 
                      o.items.length > 0
 )
                     .map(o => o._id || o.id)

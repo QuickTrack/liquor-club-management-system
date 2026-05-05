@@ -27,6 +27,7 @@ A complete Liquor Club Management System with ACID-compliant data persistence, s
  - [x] **POS Customer ID Validation** - Fixed payment validation error by ensuring only MongoDB ObjectId strings are sent as `customerId` in order payload.
  - [x] **Cashier ID Mapping for Shift Intake** – Fixed "Cashier not found" error caused by User `_id` being sent instead of Staff `_id`. Moved resolution to backend: POST `/api/shift-opening` now accepts a User ID, then automatically resolves the corresponding Staff record by case-insensitive email match. Eliminates frontend complexity and ensures reliable linking between auth and staff collections.
  - [x] **Stock Verification Deferral** – Added "Remind Me Later" button (1-hour deferral), localStorage persistence, desktop notifications, countdown banner, backend fields, and validation bypass. Missing counts auto-filled on submission.
+- [x] **POS Null Safety Fix** - Added optional chaining and fallback for `order.customer.name` in held orders and handover order display, and sanitized all `customer._id` accesses in order filters with optional chaining to prevent runtime TypeError when customer data is null or undefined.
 
  ## Current Structure
 
@@ -129,6 +130,7 @@ A complete Liquor Club Management System with ACID-compliant data persistence, s
 | 2026-05-02 | **Held Orders Resume Button** - Added individual "Resume" button for each held order in the Held Orders modal. Users can now quickly resume a specific order without using the checkbox selection. The button calls the existing `resumeOrder` function to load the order back into the cart. Updated: `src/app/pos/page.tsx:1297-1328`. |
 | 2026-05-02 | **Prevent Multiple Order Resume** - Added validation to prevent resuming a held order when there's already an active order with items. The Resume button is disabled and shows an alert if the user tries to resume when `currentOrder.items.length > 0`. |
 | 2026-05-02 | **Removed Checkboxes from Held Orders** - Simplified the Held Orders modal by removing checkboxes since individual Resume buttons provide cleaner UX. Handover modal retains checkboxes for multi-select order transfers. Updated: `src/app/pos/page.tsx`. | |
+| 2026-05-02 | **POS Null Safety Fix** - Added optional chaining and fallback for `order.customer.name` in held orders and handover order display, and sanitized all `customer._id` accesses in order filters with optional chaining to prevent runtime TypeError when customer data is null or undefined. | |
 
  ## Next Steps
 
